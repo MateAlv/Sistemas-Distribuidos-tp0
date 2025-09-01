@@ -22,6 +22,8 @@ services:
       - LOGGING_LEVEL=DEBUG
     networks:
       - testing_net
+    volumes:
+      - ./server/config.ini:/config.ini
 YAML
 
 
@@ -38,6 +40,8 @@ cat >> "$OUTPUT_FILE" <<YAML
       - testing_net
     depends_on:
       - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
 YAML
 done
 
