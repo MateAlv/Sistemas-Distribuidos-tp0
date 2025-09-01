@@ -5,11 +5,11 @@ SERVER_IP=server
 # SERVER_LISTEN_BACKLOG=5
 # LOGGING_LEVEL=INFO
 NETWORK_NAME="tp0_testing_net"
-MESSAGE="Hola Mate"
+MESSAGE="Hola Mate!!!1"
 
 RESPONSE=$(echo "${MESSAGE}" | docker run --rm --network=${NETWORK_NAME} alpine sh -c "nc ${SERVER_IP} ${SERVER_PORT}")
 
-if [[ "${RESPONSE}" == "${MESSAGE}" ]]; then
+if [ "${RESPONSE}" == "${MESSAGE}" ]; then
   echo "action: test_echo_server | result: success"
 else
   echo "action: test_echo_server | result: fail"
