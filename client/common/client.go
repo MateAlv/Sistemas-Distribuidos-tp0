@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"net"
 	"time"
+	"os"
+    "os/signal"
+    "syscall"
 
 	"github.com/op/go-logging"
 )
@@ -23,6 +26,7 @@ type ClientConfig struct {
 type Client struct {
 	config ClientConfig
 	conn   net.Conn
+    sigChan chan os.Signal 
 }
 
 // NewClient Initializes a new client receiving the configuration
@@ -30,7 +34,10 @@ type Client struct {
 func NewClient(config ClientConfig) *Client {
 	client := &Client{
 		config: config,
+		sigChan: make(chan os.Signal, 1),
 	}
+
+	signal.Notify(client.sigChan, syscall.SIGTERM)
 	return client
 }
 
@@ -52,6 +59,12 @@ func (c *Client) createClientSocket() error {
 
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
+	go func() {
+        <-c.sigChan
+        log.Infof("action: sigterm_received | result: success | client_id: %v", c.config.ID)
+        c.GracefulShutdown()
+    }()
+
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
@@ -81,9 +94,30 @@ func (c *Client) StartClientLoop() {
 			msg,
 		)
 
-		// Wait a time between sending one message and the next one
-		time.Sleep(c.config.LoopPeriod)
 
+        select {
+		// Wait a time between sending one message and the next one
+        case <-time.After(c.config.LoopPeriod):
+            // Continue
+        case <-c.sigChan:
+            log.Infof("action: sigterm_received | result: success | client_id: %v", c.config.ID)
+            c.GracefulShutdown()
+            return
+        }
+		
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
+}
+
+// GracefulShutdown makes sure all resources are released properly when the client is shutting down
+func (c *Client) GracefulShutdown() {
+    log.Infof("action: client_shutdown | result: in_progress | client_id: %v", c.config.ID)
+    
+    if c.conn != nil {
+        log.Infof("action: close_connection | result: success | client_id: %v", c.config.ID)
+        c.conn.Close()
+    }
+    
+    log.Infof("action: client_shutdown | result: success | client_id: %v", c.config.ID)
+    os.Exit(0)
 }
