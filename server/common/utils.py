@@ -23,6 +23,26 @@ class Bet:
         self.document = document
         self.birthdate = datetime.date.fromisoformat(birthdate)
         self.number = int(number)
+        
+    def serialize(self) -> str:
+        """
+        Serialize bet to protocol format: NAME|LASTNAME|DOCUMENT|BIRTHDATE|NUMBER
+        """
+        return f"{self.first_name}|{self.last_name}|{self.document}|{self.birthdate.isoformat()}|{self.number}"
+    
+    @classmethod
+    def deserialize(cls, data: str, agency: str) -> 'Bet':
+        """
+        Deserialize protocol format to Bet object.
+        Format expected: NAME|LASTNAME|DOCUMENT|BIRTHDATE|NUMBER
+        """
+        parts = data.split('|')
+        if len(parts) != 5:
+            raise ValueError(f"Invalid bet format: expected 5 parts, got {len(parts)}")
+        
+        name, last_name, document, birthdate, number = parts
+        return cls(agency, name, last_name, document, birthdate, number)
+    
 
 """ Checks whether a bet won the prize or not. """
 def has_won(bet: Bet) -> bool:
