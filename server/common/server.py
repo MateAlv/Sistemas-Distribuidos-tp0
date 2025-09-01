@@ -8,6 +8,8 @@ class Server:
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
+        self._running = True
+        self.__client_socks = []
 
     def run(self):
         """
@@ -18,11 +20,14 @@ class Server:
         finishes, servers starts to accept new connections again
         """
 
-        # TODO: Modify this program to handle signal to graceful shutdown
-        # the server
-        while True:
-            client_sock = self.__accept_new_connection()
-            self.__handle_client_connection(client_sock)
+        while self._running:
+            try:
+                client_sock = self.__accept_new_connection()
+                self.__client_socks.append(client_sock)
+                self.__handle_client_connection(client_sock)
+            except:
+                self.__graceful_shutdown()
+
 
     def __handle_client_connection(self, client_sock):
         """
@@ -56,3 +61,37 @@ class Server:
         c, addr = self._server_socket.accept()
         logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
         return c
+
+    def _begin_shutdown(self, signum, frame):
+        """
+        Handle shutdown signal
+
+        If the server receives a SIGTERM signal, this handler ensures it
+        starts the shutdown process.
+        """
+        logging.info("action: sigterm_received | result: success")
+        self._running = False
+        if self._server_socket:
+            self._server_socket.close()
+
+    def __graceful_shutdown(self):
+        """
+        This function is called when the server is shutting down.
+        It ensures all resources are released properly.
+        """
+        logging.info("action: server_shutdown | result: in_progress")
+
+        try:
+            if self._server_socket:
+                self._server_socket.close()
+        except:
+            pass
+
+        for sock in self.__client_socks:
+            try:
+                logging.info("action: close_client_socket | result: success")
+                sock.close()
+            except:
+                pass
+
+        logging.info("action: server_shutdown | result: success")

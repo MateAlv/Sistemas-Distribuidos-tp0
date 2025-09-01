@@ -44,7 +44,6 @@ YAML
 done
 
 
-# Footer con la red
 cat >> "$OUTPUT_FILE" <<'YAML'
 networks:
   testing_net:
