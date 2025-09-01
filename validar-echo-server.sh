@@ -7,7 +7,7 @@ SERVER_IP=server
 NETWORK_NAME="tp0_testing_net"
 MESSAGE="Hola Mate"
 
-RESPONSE=$(echo "${MESSAGE}" | docker run --rm --network=${NETWORK_NAME} appropriate/nc ${SERVER_IP} ${SERVER_PORT})
+RESPONSE=$(echo "${MESSAGE}" | docker run --rm --network=${NETWORK_NAME} alpine sh -c "nc ${SERVER_IP} ${SERVER_PORT}")
 
 if [[ "${RESPONSE}" == "${MESSAGE}" ]]; then
   echo "action: test_echo_server | result: success"
