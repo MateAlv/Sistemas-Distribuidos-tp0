@@ -82,7 +82,7 @@ func (c *Client) SendBet() error {
         c.bet.Document, c.bet.Number)
 
     log.Infof("action: receive_confirmation | result: success | client_id: %v | msg: %v",
-        c.config.id, response)
+        c.config.ID, response)
 
     return nil
 }
