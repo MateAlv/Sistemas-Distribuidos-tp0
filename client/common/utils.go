@@ -10,17 +10,17 @@ import (
 type Bet struct {
     Name      	string
     LastName  	string
-    ID  		string
+    Document  	string
     Birthdate 	string
     Number    	int
 }
 
 // NewBet creates a new Bet instance
-func NewBet(name, lastName, id, birthdate string, number int) *Bet {
+func NewBet(name, lastName, document, birthdate string, number int) *Bet {
     return &Bet{
         Name:      	name,
         LastName:  	lastName,
-        ID:  		id,
+        Document:  	document,
         Birthdate: 	birthdate,
         Number:    	number,
     }
@@ -29,7 +29,7 @@ func NewBet(name, lastName, id, birthdate string, number int) *Bet {
 // Serialize converts the Bet to custom protocol string
 func (lt *Bet) Serialize() string {
     return fmt.Sprintf("%s|%s|%s|%s|%d", 
-        lt.Name, lt.LastName, lt.ID, lt.Birthdate, lt.Number)
+        lt.Name, lt.LastName, lt.Document, lt.Birthdate, lt.Number)
 }
 
 // DeserializeBet deserializes custom protocol string to Bet
@@ -47,7 +47,7 @@ func DeserializeBet(data string) (*Bet, error) {
     return &Bet{
         Name:      	parts[0],
         LastName:  	parts[1],
-        ID:  		parts[2],
+        Document:  	parts[2],
         Birthdate: 	parts[3],
         Number:    	number,
     }, nil
@@ -55,15 +55,15 @@ func DeserializeBet(data string) (*Bet, error) {
 
 // String returns a string representation of the bet
 func (lt *Bet) String() string {
-    return fmt.Sprintf("Bet{Name: %s, LastName: %s, ID: %s, Birthdate: %s, Number: %d}",
-        lt.Name, lt.LastName, lt.ID, lt.Birthdate, lt.Number)
+    return fmt.Sprintf("Bet{Name: %s, LastName: %s, Document: %s, Birthdate: %s, Number: %d}",
+        lt.Name, lt.LastName, lt.Document, lt.Birthdate, lt.Number)
 }
 
 // IsValid validates that all fields are present
 func (lt *Bet) IsValid() bool {
     return lt.Name != "" && 
            lt.LastName != "" && 
-           lt.ID != "" && 
+           lt.Document != "" && 
            lt.Birthdate != "" && 
            lt.Number > 0
 }

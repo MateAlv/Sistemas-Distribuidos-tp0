@@ -25,7 +25,7 @@ type Client struct {
 	config ClientConfig
 	conn   net.Conn
 	sigChan chan os.Signal 
-	Bet 			Bet
+	bet 			Bet
 }
 
 // NewClient Initializes a new client receiving the configuration
@@ -79,10 +79,10 @@ func (c *Client) SendBet() error {
 
     // Log success according to requirements
     log.Infof("action: apuesta_enviada | result: success | dni: %s | numero: %d",
-        c.bet.ID, c.bet.Number)
+        c.bet.Document, c.bet.Number)
 
     log.Infof("action: receive_confirmation | result: success | client_id: %v | msg: %v",
-        c.config.ID, response)
+        c.config.id, response)
 
     return nil
 }
