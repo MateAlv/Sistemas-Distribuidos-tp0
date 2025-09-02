@@ -8,11 +8,13 @@ import (
 	"os"
     "os/signal"
     "syscall"
-
+    "strings"
+    
 	"github.com/op/go-logging"
 )
 
 var log = logging.MustGetLogger("log")
+const BET_ACCEPTED = "BET_ACCEPTED"
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
@@ -71,18 +73,20 @@ func (c *Client) SendBet() error {
 
     // Read confirmation from server
     response, err := bufio.NewReader(c.conn).ReadString('\n')
-    if err != nil {
-        log.Errorf("action: receive_confirmation | result: fail | client_id: %v | error: %v",
-            c.config.ID, err)
-        return err
+    response = strings.TrimSpace(response)
+    
+    // Check server response and log accordingly
+    if err != nil || response != BET_ACCEPTED {
+        log.Errorf("action: apuesta_enviada | result: fail | dni: %s | numero: %d",
+            c.bet.Document, c.bet.Number)
+        if err != nil {
+            return err
+        }
+        return fmt.Errorf("server rejected bet: %s", response)
     }
-
-    // Log success according to requirements
+    
     log.Infof("action: apuesta_enviada | result: success | dni: %s | numero: %d",
         c.bet.Document, c.bet.Number)
-
-    log.Infof("action: receive_confirmation | result: success | client_id: %v | msg: %v",
-        c.config.ID, response)
 
     return nil
 }
@@ -96,17 +100,11 @@ func (c *Client) StartClientLoop() {
     }()
 	    			
 	if !c.bet.IsValid() {
-        log.Errorf("action: validate_bet | result: fail | client_id: %v", c.config.ID)
-        return
+        return fmt.Errorf("invalid bet: %s", response)
     }
 
-    // Send lottery bet (single operation, no loop)
-    if err := c.SendBet(); err != nil {
-        log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
-            c.config.ID, err)
-        return
-    }
-
+    c.SendBet()
+    
     log.Infof("action: bet_processed | result: success | client_id: %v", c.config.ID)
 }
 

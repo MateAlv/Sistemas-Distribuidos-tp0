@@ -2,6 +2,9 @@ import socket
 import logging
 from .utils import deserialize_bet, store_bets, BET_PARTS_COUNT
 
+BET_ACCEPTED = "BET_ACCEPTED\n"
+BET_REJECTED = "BET_REJECTED\n"
+
 class Server:
     def __init__(self, port, listen_backlog):
         # Initialize server socket
@@ -43,16 +46,18 @@ class Server:
                 # Store bet using the provided function
                 store_bets([bet])
                 
-                # Log according to requirements
                 logging.info(f'action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}')
                 
-                # Send confirmation to client
-                confirmation = "BET_ACCEPTED\n"
-                # TODO: Modify the send to avoid short-writes
-                client_sock.send(confirmation.encode('utf-8'))
-                
+                confirmation = BET_ACCEPTED
+
+                self.__send_complete_message(client_sock, confirmation)
             except ValueError as parse_error:
                 logging.error(f'action: deserialize_bet | result: fail | ip: {addr[0]} | error: {parse_error}')
+                rejection = BET_REJECTED
+                try:
+                    self.__send_complete_message(client_sock, rejection)
+                except:
+                    pass 
                 
         except OSError as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
@@ -69,7 +74,6 @@ class Server:
         Then connection created is printed and returned
         """
 
-        # Connection arrived
         logging.info('action: accept_connections | result: in_progress')
         c, addr = self._server_socket.accept()
         logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
