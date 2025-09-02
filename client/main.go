@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,13 +104,29 @@ func main() {
 	// Print program config with debugging purposes
 	PrintConfig(v)
 
+	nombre := os.Getenv("NOMBRE")
+    apellido := os.Getenv("APELLIDO")
+    documento := os.Getenv("DOCUMENTO")
+    nacimiento := os.Getenv("NACIMIENTO")
+    numeroStr := os.Getenv("NUMERO")
+
+    if nombre == "" || apellido == "" || documento == "" || nacimiento == "" || numeroStr == "" {
+        log.Criticalf("Missing required environment variables: NOMBRE, APELLIDO, DOCUMENTO, NACIMIENTO, NUMERO")
+    }
+
+    // Convertir numero a int
+    numero, err := strconv.Atoi(numeroStr)
+    if err != nil {
+        log.Criticalf("Invalid NUMERO format: %v", err)
+    }
+
 	clientConfig := common.ClientConfig{
 		ServerAddress: v.GetString("server.address"),
 		ID:            v.GetString("id"),
-		LoopAmount:    v.GetInt("loop.amount"),
-		LoopPeriod:    v.GetDuration("loop.period"),
 	}
 
-	client := common.NewClient(clientConfig)
+    bet := common.NewBet(nombre, apellido, documento, nacimiento, numero, clientConfig.ID)
+
+	client := common.NewClient(clientConfig, bet)
 	client.StartClientLoop()
 }

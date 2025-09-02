@@ -34,6 +34,11 @@ cat >> "$OUTPUT_FILE" <<YAML
     entrypoint: /client
     environment:
       - CLI_ID=${i}
+      - NOMBRE=Mate${i}
+      - APELLIDO=Apellido${i}
+      - DOCUMENTO=4308475${i}
+      - NACIMIENTO=2001-0${i}-01
+      - NUMERO=757${i}
     networks:
       - testing_net
     depends_on:
