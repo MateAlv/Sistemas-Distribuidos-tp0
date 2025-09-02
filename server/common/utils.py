@@ -7,7 +7,7 @@ STORAGE_FILEPATH = "./bets.csv"
 """ Simulated winner number in the lottery contest. """
 LOTTERY_WINNER_NUMBER = 7574
 """ Number of parts in a bet. """
-BET_PARTS_COUNT = 6  # AGENCY|NAME|LASTNAME|DOCUMENT|BIRTHDATE|NUMBER
+BET_PARTS_COUNT = 6  # AGENCY;NAME;LASTNAME;DOCUMENT;BIRTHDATE;NUMBER
 
 
 """ A lottery bet registry. """
@@ -27,9 +27,9 @@ class Bet:
 
     def serialize(self) -> str:
         """
-        Serialize bet to protocol format: AGENCY|NAME|LASTNAME|DOCUMENT|BIRTHDATE|NUMBER
+        Serialize bet to protocol format: AGENCY;NAME;LASTNAME;DOCUMENT;BIRTHDATE;NUMBER
         """
-        return f"{self.agency}|{self.first_name}|{self.last_name}|{self.document}|{self.birthdate.isoformat()}|{self.number}"
+        return f"{self.agency};{self.first_name};{self.last_name};{self.document};{self.birthdate.isoformat()};{self.number}"
     
 
 """ Checks whether a bet won the prize or not. """
@@ -60,9 +60,9 @@ def load_bets() -> list[Bet]:
 
 def deserialize_bet(bet_str: str) -> Bet:
     """
-    Deserialize a bet from protocol format: AGENCY|NAME|LASTNAME|DOCUMENT|BIRTHDATE|NUMBER
+    Deserialize a bet from protocol format: AGENCY;NAME;LASTNAME;DOCUMENT;BIRTHDATE;NUMBER
     """
-    parts = bet_str.split('|')
+    parts = bet_str.split(';')
     if len(parts) != BET_PARTS_COUNT:
         raise ValueError("Invalid bet format")
     return Bet(parts[0], parts[1], parts[2], parts[3], parts[4], parts[5])

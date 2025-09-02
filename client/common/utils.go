@@ -30,13 +30,13 @@ func NewBet(agency, name, lastName, document, birthdate string, number int) *Bet
 
 // Serialize converts the Bet to custom protocol string
 func (bet *Bet) Serialize() string {
-    return fmt.Sprintf("%s|%s|%s|%s|%s|%d", 
+    return fmt.Sprintf("%s;%s;%s;%s;%s;%d", 
         bet.Agency, bet.Name, bet.LastName, bet.Document, bet.Birthdate, bet.Number)
 }
 
 // DeserializeBet deserializes custom protocol string to Bet
 func DeserializeBet(data string) (*Bet, error) {
-    parts := strings.Split(data, "|")
+    parts := strings.Split(data, ";")
     if len(parts) != 6 {
         return nil, fmt.Errorf("invalid bet format: expected 6 parts, got %d", len(parts))
     }
