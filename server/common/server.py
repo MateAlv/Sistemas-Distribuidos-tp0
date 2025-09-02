@@ -1,6 +1,6 @@
 import socket
 import logging
-
+from .utils import deserialize_bet, store_bets, BET_PARTS_COUNT
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -28,23 +28,36 @@ class Server:
             except:
                 self.__graceful_shutdown()
 
-
     def __handle_client_connection(self, client_sock):
         """
-        Read message from a specific client socket and closes the socket
-
-        If a problem arises in the communication with the client, the
-        client socket will also be closed
+        Read lottery bet from client socket and store it
         """
         try:
-            # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).rstrip().decode('utf-8')
+            msg = self.__receive_complete_message(client_sock)
             addr = client_sock.getpeername()
             logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-            # TODO: Modify the send to avoid short-writes
-            client_sock.send("{}\n".format(msg).encode('utf-8'))
+            
+            try:
+                bet = deserialize_bet(msg)
+                
+                # Store bet using the provided function
+                store_bets([bet])
+                
+                # Log according to requirements
+                logging.info(f'action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}')
+                
+                # Send confirmation to client
+                confirmation = "BET_ACCEPTED\n"
+                # TODO: Modify the send to avoid short-writes
+                client_sock.send(confirmation.encode('utf-8'))
+                
+            except ValueError as parse_error:
+                logging.error(f'action: deserialize_bet | result: fail | ip: {addr[0]} | error: {parse_error}')
+                
         except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
+            logging.error(f"action: receive_message | result: fail | error: {e}")
+        except Exception as e:
+            logging.error(f"action: handle_client_connection | result: fail | error: {e}")
         finally:
             client_sock.close()
 
@@ -95,3 +108,37 @@ class Server:
                 pass
 
         logging.info("action: server_shutdown | result: success")
+
+    def __receive_complete_message(self, client_sock):
+        """
+        Receive complete message until newline delimiter.
+        Fails if newline not found or connection issues.
+        """
+        buffer = b""
+        while b'\n' not in buffer:
+            try:
+                chunk = client_sock.recv(1024)
+                if not chunk:
+                    raise OSError("Connection closed before complete message received")
+                buffer += chunk
+            except OSError:
+                raise 
+        
+        message = buffer.split(b'\n')[0].decode('utf-8')
+        return message
+
+    def __send_complete_message(self, client_sock, message):
+        """
+        Send complete message, ensuring all bytes are sent.
+        """
+        data = message.encode('utf-8')
+        total_sent = 0
+        
+        while total_sent < len(data):
+            try:
+                sent = client_sock.send(data[total_sent:])
+                if sent == 0:
+                    raise OSError("Socket connection broken")
+                total_sent += sent
+            except OSError:
+                raise 
