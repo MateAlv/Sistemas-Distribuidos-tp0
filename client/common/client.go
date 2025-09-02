@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"net"
-	"time"
 	"os"
     "os/signal"
     "syscall"
@@ -100,12 +99,11 @@ func (c *Client) StartClientLoop() {
     }()
 	    			
 	if !c.bet.IsValid() {
-        return fmt.Errorf("invalid bet: %s", response)
+        log.Errorf("invalid bet: %s")
+        return
     }
 
     c.SendBet()
-    
-    log.Infof("action: bet_processed | result: success | client_id: %v", c.config.ID)
 }
 
 // GracefulShutdown makes sure all resources are released properly when the client is shutting down
