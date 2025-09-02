@@ -125,8 +125,8 @@ func main() {
 		ID:            v.GetString("id"),
 	}
 
-    bet := common.NewBet(nombre, apellido, documento, nacimiento, numero, clientConfig.ID)
+    bet := common.NewBet(clientConfig.ID, nombre, apellido, documento, nacimiento, numero)
 
-	client := common.NewClient(clientConfig, bet)
+	client := common.NewClient(clientConfig, *bet)
 	client.StartClientLoop()
 }
