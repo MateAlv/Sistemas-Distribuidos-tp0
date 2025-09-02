@@ -19,6 +19,7 @@ const BET_ACCEPTED = "BET_ACCEPTED"
 type ClientConfig struct {
 	ID            	string
 	ServerAddress 	string
+    BatchSize     int 
 }
 
 // Client Entity that encapsulates how
