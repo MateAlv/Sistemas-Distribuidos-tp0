@@ -86,7 +86,7 @@ func PrintConfig(v *viper.Viper) {
 	log.Infof("action: config | result: success | client_id: %s | server_address: %s | csv_fil: %s | log_level: %s",
 		v.GetString("id"),
 		v.GetString("server.address"),
-		v.GetString("data.file"),
+		DEFAULT_CSV_FILE_PATH,
 		v.GetString("log.level"),
 	)
 }
@@ -117,7 +117,7 @@ func main() {
 		},
 	}
 
-	client, err := common.NewClient(clientConfig, v.GetString("data.file"))
+	client, err := common.NewClient(clientConfig, DEFAULT_CSV_FILE_PATH)
 	if err != nil {
 		log.Criticalf("Failed to create client: %v", err)
 	}
