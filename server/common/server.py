@@ -129,7 +129,7 @@ class Server:
             
         self.__send_complete_message(client_sock, response)
         
-        logging.info(f"action: consulta_ganadores | result: success | agency: {client_agency} | cant_ganadores: {len(winning_dnis)}")
+        logging.info(f"action: winners_sent | result: success | agency: {client_agency} | cant_ganadores: {len(winning_dnis)}")
 
     def __receive_complete_message(self, client_sock):
         """
