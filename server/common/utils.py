@@ -1,6 +1,6 @@
 import csv
 import datetime
-import time
+import logging
 
 """ Bets storage location. """
 STORAGE_FILEPATH = "./bets.csv"
@@ -12,9 +12,6 @@ BET_PARTS_COUNT = 6  # AGENCY;NAME;LASTNAME;DOCUMENT;BIRTHDATE;NUMBER
 # Protocol constants for batch processing
 BATCH_FIELD_SEPARATOR = ";"
 BATCH_SEPARATOR = "~"
-MESSAGE_DELIMITER = "\n"
-SUCCESS_RESPONSE = "OK"
-FAILURE_RESPONSE = "FAIL"
 BATCH_HEADER_PREFIX = "S:"
 
 
@@ -65,6 +62,38 @@ def load_bets() -> list[Bet]:
         reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
         for row in reader:
             yield Bet(row[0], row[1], row[2], row[3], row[4], row[5])
+
+def load_winning_bets(agency: int) -> list[str]:
+    """
+    Loads only the winning bets DNIs for a specific agency from STORAGE_FILEPATH.
+    Returns list of DNIs (documents) of winners for the given agency.
+    Memory efficient - filters while reading, doesn't load all bets.
+    Not thread-safe/process-safe.
+    """
+    winning_dnis = []
+    
+    try:
+        with open(STORAGE_FILEPATH, 'r') as file:
+            reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
+            for row in reader:
+                if len(row) >= BET_PARTS_COUNT:
+                    # Extract fields: [agency, first_name, last_name, document, birthdate, number]
+                    bet_agency = int(row[0])
+                    bet_number = int(row[5])
+                    bet_document = row[3]
+                    
+                    # Filter: only this agency AND winning number
+                    if bet_agency == agency and bet_number == LOTTERY_WINNER_NUMBER:
+                        winning_dnis.append(bet_document)
+                        
+    except FileNotFoundError:
+        logging.warning(f"action: load_winning_bets | agency: {agency} | result: file_not_found")
+        return []
+    except Exception as e:
+        logging.error(f"action: load_winning_bets | agency: {agency} | error: {e}")
+        return []
+    
+    return winning_dnis
 
 
 def deserialize_bet(bet_str: str) -> Bet:

@@ -19,6 +19,10 @@ const (
 	PROTOCOL_MESSAGE_DELIMITER = "\n"
 	PROTOCOL_SUCCESS_RESPONSE  = "OK"
 	PROTOCOL_FAILURE_RESPONSE  = "FAIL"
+
+	PROTOCOL_FINISHED_MESSAGE = "FINISHED"
+	PROTOCOL_QUERY_WINNERS    = "QUERY_WINNERS"
+	PROTOCOL_WINNERS_RESPONSE = "WINNERS"
 )
 
 var log = logging.MustGetLogger("log")
@@ -108,12 +112,15 @@ func main() {
 		ServerAddress: v.GetString("server.address"),
 		ID:            v.GetString("id"),
 		MessageProtocol: common.ProtocolConfig{
-			BatchSize:        v.GetInt("batch.maxAmount"),
-			FieldSeparator:   PROTOCOL_FIELD_SEPARATOR,
-			BatchSeparator:   PROTOCOL_BATCH_SEPARATOR,
-			MessageDelimiter: PROTOCOL_MESSAGE_DELIMITER,
-			SuccessResponse:  PROTOCOL_SUCCESS_RESPONSE,
-			FailureResponse:  PROTOCOL_FAILURE_RESPONSE,
+			BatchSize:               v.GetInt("batch.maxAmount"),
+			FieldSeparator:          PROTOCOL_FIELD_SEPARATOR,
+			BatchSeparator:          PROTOCOL_BATCH_SEPARATOR,
+			MessageDelimiter:        PROTOCOL_MESSAGE_DELIMITER,
+			SuccessResponse:         PROTOCOL_SUCCESS_RESPONSE,
+			FailureResponse:         PROTOCOL_FAILURE_RESPONSE,
+			ProtocolFinishedMessage: PROTOCOL_FINISHED_MESSAGE,
+			ProtocolQueryWinners:    PROTOCOL_QUERY_WINNERS,
+			ProtocolWinnersResponse: PROTOCOL_WINNERS_RESPONSE,
 		},
 	}
 

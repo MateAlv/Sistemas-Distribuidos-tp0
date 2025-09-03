@@ -1,113 +1,135 @@
+import os
 import socket
 import logging
-from .utils import deserialize_batch, process_winning_bets, SUCCESS_RESPONSE, FAILURE_RESPONSE, MESSAGE_DELIMITER
+import threading
+from .utils import (deserialize_batch, store_bets, load_winning_bets, BATCH_SEPARATOR)
 
+# Message protocol constants
+MESSAGE_DELIMITER = b"\n"
+SUCCESS_RESPONSE = "OK"
+FAILURE_RESPONSE = "FAIL"
+FINISHED_MESSAGE = "FINISHED"
+WINNERS_PREFIX = "WINNERS:"
 
 class Server:
     def __init__(self, port, listen_backlog):
-        # Initialize server socket
+        self.port = port
+        self.listen_backlog = listen_backlog
+        
+        # Socket setup
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
+        
+        # Server state
         self._running = True
-        self.__client_socks = []
+        
+        # Thread management
+        self.client_threads = []
+        
+        # Get expected agencies from environment
+        expected_agencies = int(os.getenv('CLI_CLIENTS', '5'))
+        self.lottery_barrier = threading.Barrier(expected_agencies)
+        
+        logging.info(f"action: server_init | expected_agencies: {expected_agencies}")
+        
 
     def run(self):
-        """
-        Dummy Server loop
-
-        Server that accept a new connections and establishes a
-        communication with a client. After client with communucation
-        finishes, servers starts to accept new connections again
-        """
-
-        while self._running:
-            try:
-                client_sock = self.__accept_new_connection()
-                self.__client_socks.append(client_sock)
-                self.__handle_client_connection(client_sock)
-            except:
-                self.__graceful_shutdown()
-
-    def __handle_client_connection(self, client_sock):
-        """
-        Read batch of bets from client and return winning bets (if any)
-        """
+        """Server loop - accept connections and spawn threads"""
+        logging.info("action: accept_connections | result: in_progress")
+        
         try:
-            msg = self.__receive_complete_message(client_sock)
-            addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]}')
-            
-            try:
-                all_bets = deserialize_batch(msg)
-
-                logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(all_bets)}')
-                
-                response = SUCCESS_RESPONSE + MESSAGE_DELIMITER
-                self.__send_complete_message(client_sock, response)
-
-            except ValueError as parse_error:
-                logging.error(f'action: apuesta_recibida | result: fail | cantidad: ?')
-                
-                response = FAILURE_RESPONSE + MESSAGE_DELIMITER
+            while self._running:
                 try:
-                    self.__send_complete_message(client_sock, response)
-                except:
-                    pass
-                
-        except OSError as e:
-            logging.error(f"action: receive_message | result: fail | error: {e}")
+                    client_sock, addr = self._server_socket.accept()
+                    
+                    # Create thread to handle client (Exercise 8: parallel processing)
+                    client_thread = threading.Thread(
+                        target=self.__handle_client_connection,
+                        args=(client_sock,)
+                    )
+                    client_thread.daemon = False  # Must finish properly
+                    client_thread.start()
+                    
+                    # Track active threads
+                    self.client_threads.append(client_thread)
+                    
+                    # Cleanup finished threads
+                    self.__cleanup_finished_threads()
+                    
+                except OSError:
+                    # Socket closed during shutdown
+                    if self._running:
+                        logging.error("action: accept_connection | result: fail")
+                    break
+                    
         except Exception as e:
-            logging.error(f"action: handle_client_connection | result: fail | error: {e}")
+            logging.error(f"action: server_loop | result: fail | error: {e}")
         finally:
-            client_sock.close()
+            self.__graceful_shutdown()
 
-    def __accept_new_connection(self):
-        """
-        Accept new connections
-
-        Function blocks until a connection to a client is made.
-        Then connection created is printed and returned
-        """
-
-        logging.info('action: accept_connections | result: in_progress')
-        c, addr = self._server_socket.accept()
-        logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
-        return c
-
-    def _begin_shutdown(self, signum, frame):
-        """
-        Handle shutdown signal
-
-        If the server receives a SIGTERM signal, this handler ensures it
-        starts the shutdown process.
-        """
-        logging.info("action: sigterm_received | result: success")
-        self._running = False
-        if self._server_socket:
-            self._server_socket.close()
-
-    def __graceful_shutdown(self):
-        """
-        This function is called when the server is shutting down.
-        It ensures all resources are released properly.
-        """
-        logging.info("action: server_shutdown | result: in_progress")
-
+    def __cleanup_finished_threads(self):
+        """Remove finished threads from tracking list"""
+        self.client_threads = [t for t in self.client_threads if t.is_alive()]
+        
+    def __handle_client_connection(self, client_sock):
+        """Handle communication with a connected client"""
+        client_agency = None
+        
         try:
-            if self._server_socket:
-                self._server_socket.close()
-        except:
-            pass
-
-        for sock in self.__client_socks:
+            while True:
+                msg = self.__receive_complete_message(client_sock)
+                if not msg:
+                    break
+                    
+                if msg.startswith("S:"):
+                    bets = deserialize_batch(msg)
+                    if bets:
+                        client_agency = bets[0].agency
+                        store_bets(bets)
+                        logging.info(f"action: apuesta_recibida | result: success | cantidad: {len(bets)}")
+                    self.__send_complete_message(client_sock, SUCCESS_RESPONSE)
+                    
+                elif msg == "FINISHED":
+                    # Wait for all agencies, then return winners
+                    self.__handle_finished_and_return_winners(client_sock, client_agency)
+                    break  # Client disconnects after getting winners
+                    
+                else:
+                    logging.warning(f"action: unknown_message | message: {msg}")
+                    self.__send_complete_message(client_sock, FAILURE_RESPONSE)
+                    
+        except Exception as e:
+            logging.error(f"action: client_handler_error | error: {e}")
+        finally:
             try:
-                logging.info("action: close_client_socket | result: success")
-                sock.close()
+                client_sock.close()
             except:
                 pass
 
-        logging.info("action: server_shutdown | result: success")
+    def __handle_finished_and_return_winners(self, client_sock, client_agency):
+        """Handle FINISHED message - wait for lottery and return winners"""
+        try:
+            # Wait for all agencies to reach this point
+            index = self.lottery_barrier.wait(timeout=120)
+            
+            if index == 0:  # First past barrier logs lottery
+                logging.info("action: sorteo | result: success")
+                
+        except Exception as e:
+            logging.error(f"action: lottery_barrier_error | error: {e}")
+            
+        # Lottery is complete - load and return winners for this agency
+        winning_dnis = load_winning_bets(client_agency)
+        
+        if winning_dnis:
+            response = WINNERS_PREFIX + BATCH_SEPARATOR.join(winning_dnis)
+        else:
+            response = WINNERS_PREFIX
+            
+        self.__send_complete_message(client_sock, response)
+        
+        logging.info(f"action: consulta_ganadores | result: success | agency: {client_agency} | cant_ganadores: {len(winning_dnis)}")
 
     def __receive_complete_message(self, client_sock):
         """
@@ -125,7 +147,7 @@ class Server:
                     raise OSError("Connection closed before complete message received")
                 buffer += chunk
                 
-                lines_received = buffer.count(b'\n')
+                lines_received = buffer.count(MESSAGE_DELIMITER)
                 
             except OSError:
                 raise 
@@ -148,3 +170,40 @@ class Server:
                 total_sent += sent
             except OSError:
                 raise 
+
+    def _begin_shutdown(self, signum, frame):
+        """
+        Handle shutdown signal
+
+        If the server receives a SIGTERM signal, this handler ensures it
+        starts the shutdown process.
+        """
+        logging.info("action: sigterm_received | result: success")
+        self._running = False
+        if self._server_socket:
+            self._server_socket.close()
+
+    def __graceful_shutdown(self):
+        """Wait for all client threads to finish"""
+        logging.info("action: shutdown | result: in_progress")
+        
+        # Stop accepting new connections
+        self._running = False
+        
+        # Close server socket if not already closed
+        try:
+            self._server_socket.close()
+        except:
+            pass
+            
+        # Wait for all client threads to complete their work
+        active_threads = [t for t in self.client_threads if t.is_alive()]
+        if active_threads:
+            logging.info(f"action: waiting_for_threads | count: {len(active_threads)}")
+            
+            for thread in active_threads:
+                thread.join(timeout=30)  # Wait max 30 seconds per thread
+                if thread.is_alive():
+                    logging.warning("action: thread_timeout | result: warning")
+
+        logging.info("action: server_shutdown | result: success")

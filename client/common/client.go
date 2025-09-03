@@ -23,12 +23,15 @@ type ClientConfig struct {
 
 // ProtocolConfig holds message protocol configuration
 type ProtocolConfig struct {
-	BatchSize        int
-	FieldSeparator   string
-	BatchSeparator   string
-	MessageDelimiter string
-	SuccessResponse  string
-	FailureResponse  string
+	BatchSize               int
+	FieldSeparator          string
+	BatchSeparator          string
+	MessageDelimiter        string
+	SuccessResponse         string
+	FailureResponse         string
+	ProtocolFinishedMessage string
+	ProtocolQueryWinners    string
+	ProtocolWinnersResponse string
 }
 
 // Client Entity that encapsulates how
@@ -140,6 +143,73 @@ func (c *Client) StartClientLoop() error {
 		batchNumber, totalRead, lineNumber)
 
 	return nil
+}
+
+func (c *Client) SendFinishedNotification() error {
+	if err := c.createClientSocket(); err != nil {
+		return err
+	}
+	defer c.conn.Close()
+
+	message := c.config.MessageProtocol.ProtocolFinishedMessage + c.config.MessageProtocol.MessageDelimiter
+
+	if _, err := c.conn.Write([]byte(message)); err != nil {
+		return fmt.Errorf("failed to send finished notification: %v", err)
+	}
+
+	// Read response
+	response := make([]byte, 1024)
+	n, err := c.conn.Read(response)
+	if err != nil {
+		return fmt.Errorf("failed to read finished response: %v", err)
+	}
+
+	responseStr := strings.TrimSpace(string(response[:n]))
+	if responseStr != c.config.MessageProtocol.SuccessResponse {
+		return fmt.Errorf("server rejected finished notification: %s", responseStr)
+	}
+
+	log.Infof("action: finished_notification_sent | result: success")
+	return nil
+}
+
+func (c *Client) sendMessageAndReceiveResponse(message string) (string, error) {
+	err := c.createClientSocket()
+	if err != nil {
+		return "", fmt.Errorf("failed to create socket: %v", err)
+	}
+	defer c.conn.Close()
+
+	// Send message
+	fullMessage := message + c.config.MessageProtocol.MessageDelimiter
+	if _, err := c.conn.Write([]byte(fullMessage)); err != nil {
+		return "", fmt.Errorf("failed to send message: %v", err)
+	}
+
+	// Read response in chunks until delimiter
+	var response strings.Builder
+	buffer := make([]byte, 256) // Reasonable chunk size
+	delimiter := c.config.MessageProtocol.MessageDelimiter
+
+	for {
+		n, err := c.conn.Read(buffer)
+		if err != nil {
+			return "", fmt.Errorf("failed to read response: %v", err)
+		}
+
+		chunk := string(buffer[:n])
+		response.WriteString(chunk)
+
+		// Check if we have complete message
+		if strings.Contains(response.String(), delimiter) {
+			break
+		}
+	}
+
+	// Extract message before delimiter
+	result := response.String()
+	delimiterPos := strings.Index(result, delimiter)
+	return result[:delimiterPos], nil
 }
 
 // GracefulShutdown makes sure all resources are released properly when the client is shutting down
