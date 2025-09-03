@@ -3,3 +3,8 @@
 
 # Executables
 bin/
+
+# Data files - CSV generated during tests and execution
+data/
+*.csv
+bets.csv
