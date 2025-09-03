@@ -31,7 +31,7 @@ class Server:
         expected_agencies = int(os.getenv('CLI_CLIENTS', '5'))
         self.lottery_barrier = threading.Barrier(expected_agencies)
         
-        logging.info(f"action: server_init | expected_agencies: {expected_agencies}")
+        logging.info(f"action: server_init | result: success | expected_agencies: {expected_agencies}")
         
 
     def run(self):
