@@ -112,5 +112,7 @@ func (br *BatchReader) SerializeBatch(bets []*Bet) string {
 	for _, bet := range bets {
 		serializedBets = append(serializedBets, bet.Serialize())
 	}
-	return strings.Join(serializedBets, br.messageProtocol.BatchSeparator)
+
+	batchData := strings.Join(serializedBets, br.messageProtocol.BatchSeparator) // bet1~bet2~bet3
+	return fmt.Sprintf("S:%d\n%s", len(bets), batchData)                         // S:3\nbet1~bet2~bet3
 }

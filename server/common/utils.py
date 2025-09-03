@@ -9,6 +9,14 @@ LOTTERY_WINNER_NUMBER = 7574
 """ Number of parts in a bet. """
 BET_PARTS_COUNT = 6  # AGENCY;NAME;LASTNAME;DOCUMENT;BIRTHDATE;NUMBER
 
+# Protocol constants for batch processing
+BATCH_FIELD_SEPARATOR = ";"
+BATCH_SEPARATOR = "~"
+MESSAGE_DELIMITER = "\n"
+SUCCESS_RESPONSE = "OK"
+FAILURE_RESPONSE = "FAIL"
+BATCH_HEADER_PREFIX = "S:"
+
 
 """ A lottery bet registry. """
 class Bet:
@@ -29,8 +37,9 @@ class Bet:
         """
         Serialize bet to protocol format: AGENCY;NAME;LASTNAME;DOCUMENT;BIRTHDATE;NUMBER
         """
-        return f"{self.agency};{self.first_name};{self.last_name};{self.document};{self.birthdate.isoformat()};{self.number}"
-    
+        return f"{self.agency}{BATCH_FIELD_SEPARATOR}{self.first_name}{BATCH_FIELD_SEPARATOR}{self.last_name}{BATCH_FIELD_SEPARATOR}{self.document}{BATCH_FIELD_SEPARATOR}{self.birthdate.isoformat()}{BATCH_FIELD_SEPARATOR}{self.number}"
+
+
 
 """ Checks whether a bet won the prize or not. """
 def has_won(bet: Bet) -> bool:
@@ -62,7 +71,53 @@ def deserialize_bet(bet_str: str) -> Bet:
     """
     Deserialize a bet from protocol format: AGENCY;NAME;LASTNAME;DOCUMENT;BIRTHDATE;NUMBER
     """
-    parts = bet_str.split(';')
+    parts = bet_str.split(BATCH_FIELD_SEPARATOR)
     if len(parts) != BET_PARTS_COUNT:
-        raise ValueError("Invalid bet format")
-    return Bet(parts[0], parts[1], parts[2], parts[3], parts[4], parts[5])
+        raise ValueError(f"Invalid bet format: expected {BET_PARTS_COUNT} parts, got {len(parts)}")
+    
+    return Bet(parts[0].strip(), parts[1].strip(), parts[2].strip(), 
+               parts[3].strip(), parts[4].strip(), parts[5].strip())
+
+
+def deserialize_batch(message: str) -> list[Bet]:
+    """
+    S:3
+    bet1~bet2~bet3
+    """
+    lines = message.strip().split('\n')
+    
+    if len(lines) != 2:
+        raise ValueError(f"Invalid batch format: expected 2 lines, got {len(lines)}")
+    
+    # Parse header
+    header = lines[0]
+    if not header.startswith(BATCH_HEADER_PREFIX):
+        raise ValueError(f"Invalid batch header: {header}")
+    
+    expected_count = int(header.split(":")[1])
+    
+    # Parse batch
+    batch_data = lines[1]
+    bets_str = batch_data.split(BATCH_SEPARATOR)
+    
+    if len(bets_str) != expected_count:
+        raise ValueError(f"Batch size mismatch: expected {expected_count}, got {len(bets_str)}")
+    
+    # Deserialize each bet
+    bets = []
+    for bet_str in bets_str:
+        if bet_str.strip():
+            bet = deserialize_bet(bet_str.strip())
+            bets.append(bet)
+    
+    return bets
+
+def process_winning_bets(bets: list[Bet]) -> list[Bet]:
+    """
+    Filter and return only winning bets from a batch
+    """
+    winning_bets = []
+    for bet in bets:
+        if has_won(bet):
+            winning_bets.append(bet)
+    return winning_bets

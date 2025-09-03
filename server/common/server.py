@@ -1,9 +1,7 @@
 import socket
 import logging
-from .utils import deserialize_bet, store_bets, BET_PARTS_COUNT
+from .utils import deserialize_batch, process_winning_bets, SUCCESS_RESPONSE, FAILURE_RESPONSE, MESSAGE_DELIMITER
 
-BET_ACCEPTED = "BET_ACCEPTED\n"
-BET_REJECTED = "BET_REJECTED\n"
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -33,31 +31,29 @@ class Server:
 
     def __handle_client_connection(self, client_sock):
         """
-        Read lottery bet from client socket and store it
+        Read batch of bets from client and return winning bets (if any)
         """
         try:
             msg = self.__receive_complete_message(client_sock)
             addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+            logging.info(f'action: receive_message | result: success | ip: {addr[0]}')
             
             try:
-                bet = deserialize_bet(msg)
-                
-                # Store bet using the provided function
-                store_bets([bet])
-                
-                logging.info(f'action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}')
-                
-                confirmation = BET_ACCEPTED
+                all_bets = deserialize_batch(msg)
 
-                self.__send_complete_message(client_sock, confirmation)
+                logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(all_bets)}')
+                
+                response = SUCCESS_RESPONSE + MESSAGE_DELIMITER
+                self.__send_complete_message(client_sock, response)
+                
             except ValueError as parse_error:
-                logging.error(f'action: deserialize_bet | result: fail | ip: {addr[0]} | error: {parse_error}')
-                rejection = BET_REJECTED
+                logging.error(f'action: apuesta_recibida | result: fail | cantidad: ?')
+                
+                response = FAILURE_RESPONSE + MESSAGE_DELIMITER
                 try:
-                    self.__send_complete_message(client_sock, rejection)
+                    self.__send_complete_message(client_sock, response)
                 except:
-                    pass 
+                    pass
                 
         except OSError as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
@@ -115,20 +111,27 @@ class Server:
 
     def __receive_complete_message(self, client_sock):
         """
-        Receive complete message until newline delimiter.
-        Fails if newline not found or connection issues.
+        Receive complete batch message until final delimiter.
+        Handles multi-line messages (BATCH_SIZE:N\nbet1~bet2~bet3\n)
         """
         buffer = b""
-        while b'\n' not in buffer:
+        lines_received = 0
+        expected_lines = 2  # Header + batch data
+        
+        while lines_received < expected_lines:
             try:
                 chunk = client_sock.recv(1024)
                 if not chunk:
                     raise OSError("Connection closed before complete message received")
                 buffer += chunk
+                
+                lines_received = buffer.count(b'\n')
+                
             except OSError:
                 raise 
         
-        message = buffer.split(b'\n')[0].decode('utf-8')
+        # Decode complete message (remove final delimiter)
+        message = buffer.rstrip(b'\n').decode('utf-8')
         return message
 
     def __send_complete_message(self, client_sock, message):
