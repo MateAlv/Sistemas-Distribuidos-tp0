@@ -1,9 +1,14 @@
 server:
   address: "server:12345"
-loop:
-  amount: 500
-  period: "150ms"
 log:
   level: "INFO"
 batch:
   maxAmount: 100
+protocol:
+  field_separator: ";"
+  batch_separator: "~"
+  message_delimiter: "\n"
+  success_response: "OK"
+  failure_response: "FAIL"
+data:
+  file: "/data/agency.csv"

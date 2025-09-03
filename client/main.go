@@ -3,12 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/op/go-logging"
-	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
 	"github.com/7574-sistemas-distribuidos/docker-compose-init/client/common"
@@ -35,9 +32,16 @@ func InitConfig() (*viper.Viper, error) {
 	// Add env variables supported
 	v.BindEnv("id")
 	v.BindEnv("server", "address")
-	v.BindEnv("loop", "period")
-	v.BindEnv("loop", "amount")
 	v.BindEnv("log", "level")
+
+	// Data related configuration
+	v.BindEnv("data", "file")
+	v.BindEnv("batch", "maxAmount")
+	v.BindEnv("protocol", "field_separator")
+	v.BindEnv("protocol", "batch_separator")
+	v.BindEnv("protocol", "message_delimiter")
+	v.BindEnv("protocol", "success_response")
+	v.BindEnv("protocol", "failure_response")
 
 	// Try to read configuration from config file. If config file
 	// does not exists then ReadInConfig will fail but configuration
@@ -46,12 +50,6 @@ func InitConfig() (*viper.Viper, error) {
 	v.SetConfigFile("./config.yaml")
 	if err := v.ReadInConfig(); err != nil {
 		fmt.Printf("Configuration could not be read from config file. Using env variables instead")
-	}
-
-	// Parse time.Duration variables and return an error if those variables cannot be parsed
-
-	if _, err := time.ParseDuration(v.GetString("loop.period")); err != nil {
-		return nil, errors.Wrapf(err, "Could not parse CLI_LOOP_PERIOD env var as time.Duration.")
 	}
 
 	return v, nil
@@ -82,11 +80,10 @@ func InitLogger(logLevel string) error {
 // PrintConfig Print all the configuration parameters of the program.
 // For debugging purposes only
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: success | client_id: %s | server_address: %s | loop_amount: %v | loop_period: %v | log_level: %s",
+	log.Infof("action: config | result: success | client_id: %s | server_address: %s | csv_fil: %s | log_level: %s",
 		v.GetString("id"),
 		v.GetString("server.address"),
-		v.GetInt("loop.amount"),
-		v.GetDuration("loop.period"),
+		v.GetString("data.file"),
 		v.GetString("log.level"),
 	)
 }
@@ -104,29 +101,25 @@ func main() {
 	// Print program config with debugging purposes
 	PrintConfig(v)
 
-	nombre := os.Getenv("NOMBRE")
-    apellido := os.Getenv("APELLIDO")
-    documento := os.Getenv("DOCUMENTO")
-    nacimiento := os.Getenv("NACIMIENTO")
-    numeroStr := os.Getenv("NUMERO")
-
-    if nombre == "" || apellido == "" || documento == "" || nacimiento == "" || numeroStr == "" {
-        log.Criticalf("Missing required environment variables: NOMBRE, APELLIDO, DOCUMENTO, NACIMIENTO, NUMERO")
-    }
-
-    // Convertir numero a int
-    numero, err := strconv.Atoi(numeroStr)
-    if err != nil {
-        log.Criticalf("Invalid NUMERO format: %v", err)
-    }
-
 	clientConfig := common.ClientConfig{
 		ServerAddress: v.GetString("server.address"),
 		ID:            v.GetString("id"),
+		MessageProtocol: common.ProtocolConfig{
+			BatchSize:        v.GetInt("batch.maxAmount"),
+			FieldSeparator:   v.GetString("protocol.field_separator"),
+			BatchSeparator:   v.GetString("protocol.batch_separator"),
+			MessageDelimiter: v.GetString("protocol.message_delimiter"),
+			SuccessResponse:  v.GetString("protocol.success_response"),
+			FailureResponse:  v.GetString("protocol.failure_response"),
+		},
 	}
 
-    bet := common.NewBet(clientConfig.ID, nombre, apellido, documento, nacimiento, numero)
+	client, err := common.NewClient(clientConfig, v.GetString("data.file"))
+	if err != nil {
+		log.Criticalf("Failed to create client: %v", err)
+	}
 
-	client := common.NewClient(clientConfig, *bet)
-	client.StartClientLoop()
+	if err := client.StartClientLoop(); err != nil {
+		log.Criticalf("Failed to start client loop: %v", err)
+	}
 }

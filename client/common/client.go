@@ -5,42 +5,56 @@ import (
 	"fmt"
 	"net"
 	"os"
-    "os/signal"
-    "syscall"
-    "strings"
-    
+	"os/signal"
+	"strings"
+	"syscall"
+
 	"github.com/op/go-logging"
 )
 
 var log = logging.MustGetLogger("log")
-const BET_ACCEPTED = "BET_ACCEPTED"
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
-	ID            	string
-	ServerAddress 	string
-    BatchSize     int 
+	ID              string
+	ServerAddress   string
+	MessageProtocol ProtocolConfig
+}
+
+// ProtocolConfig holds message protocol configuration
+type ProtocolConfig struct {
+	BatchSize        int
+	FieldSeparator   string
+	BatchSeparator   string
+	MessageDelimiter string
+	SuccessResponse  string
+	FailureResponse  string
 }
 
 // Client Entity that encapsulates how
 type Client struct {
-	config ClientConfig
-	conn   net.Conn
-	sigChan chan os.Signal 
-	bet 			Bet
+	config      ClientConfig
+	conn        net.Conn
+	sigChan     chan os.Signal
+	batchReader *BatchReader
 }
 
 // NewClient Initializes a new client receiving the configuration
 // as a parameter
-func NewClient(config ClientConfig, bet Bet) *Client {
+func NewClient(config ClientConfig, csvFilePath string) (*Client, error) {
+	reader, err := NewBatchReader(csvFilePath, config.ID, config.MessageProtocol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create batch reader: %v", err)
+	}
+
 	client := &Client{
-		config: config,
-		sigChan: make(chan os.Signal, 1),
-		bet: bet,
+		config:      config,
+		sigChan:     make(chan os.Signal, 1),
+		batchReader: reader,
 	}
 
 	signal.Notify(client.sigChan, syscall.SIGTERM)
-	return client
+	return client, nil
 }
 
 // CreateClientSocket Initializes client socket. In case of
@@ -59,63 +73,88 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
-// SendBet sends the lottery bet to the server
-func (c *Client) SendBet() error {
-    // Create connection
-    if err := c.createClientSocket(); err != nil {
-        return err
-    }
-    defer c.conn.Close()
+// SendBatch sends a batch of bets to the server
+func (c *Client) SendBatch(bets []*Bet) error {
+	if err := c.createClientSocket(); err != nil {
+		return err
+	}
+	defer c.conn.Close()
 
-    // Serialize and send bet
-    data := c.bet.Serialize()
-    fmt.Fprintf(c.conn, "%s\n", data)
+	batchData := c.batchReader.SerializeBatch(bets)
+	message := batchData + c.config.MessageProtocol.MessageDelimiter
 
-    // Read confirmation from server
-    response, err := bufio.NewReader(c.conn).ReadString('\n')
-    response = strings.TrimSpace(response)
-    
-    // Check server response and log accordingly
-    if err != nil || response != BET_ACCEPTED {
-        log.Errorf("action: apuesta_enviada | result: fail | dni: %s | numero: %d",
-            c.bet.Document, c.bet.Number)
-        if err != nil {
-            return err
-        }
-        return fmt.Errorf("server rejected bet: %s", response)
-    }
-    
-    log.Infof("action: apuesta_enviada | result: success | dni: %s | numero: %d",
-        c.bet.Document, c.bet.Number)
+	_, err := c.conn.Write([]byte(message))
+	if err != nil {
+		return fmt.Errorf("failed to send batch: %v", err)
+	}
 
-    return nil
+	response, err := bufio.NewReader(c.conn).ReadString('\n')
+	if err != nil {
+		log.Errorf("action: apuesta_enviada | result: fail | cantidad: %d | error: %v", len(bets), err)
+		return err
+	}
+
+	response = strings.TrimSpace(response)
+
+	if response == c.config.MessageProtocol.SuccessResponse {
+		log.Infof("action: apuesta_enviada | result: success | cantidad: %d", len(bets))
+		return nil
+	} else {
+		log.Errorf("action: apuesta_enviada | result: fail | cantidad: %d | server_response: %s", len(bets), response)
+		return fmt.Errorf("server rejected batch: %s", response)
+	}
 }
 
-// StartClientLoop Send messages to the client until some time threshold is met
-func (c *Client) StartClientLoop() {
+// StartClientLoop processes CSV file in batches using internal reader
+func (c *Client) StartClientLoop() error {
 	go func() {
-        <-c.sigChan
-        log.Infof("action: sigterm_received | result: success | client_id: %v", c.config.ID)
-        c.GracefulShutdown()
-    }()
-	    			
-	if !c.bet.IsValid() {
-        log.Errorf("invalid bet: %s")
-        return
-    }
+		<-c.sigChan
+		log.Infof("action: sigterm_received | result: success | client_id: %v", c.config.ID)
+		c.GracefulShutdown()
+	}()
 
-    c.SendBet()
+	batchNumber := 0
+
+	// Process batches using internal reader
+	for {
+		batch, err := c.batchReader.ReadNextBatch()
+		if err != nil {
+			return fmt.Errorf("failed to read batch: %v", err)
+		}
+
+		if len(batch) == 0 {
+			break
+		}
+
+		batchNumber++
+		log.Infof("action: batch_prepared | result: success | batch_number: %d | size: %d",
+			batchNumber, len(batch))
+
+		if err := c.SendBatch(batch); err != nil {
+			return fmt.Errorf("failed to send batch %d: %v", batchNumber, err)
+		}
+	}
+
+	lineNumber, totalRead := c.batchReader.GetStats()
+	log.Infof("action: file_processed | result: success | total_batches: %d | total_bets: %d | lines_read: %d",
+		batchNumber, totalRead, lineNumber)
+
+	return nil
 }
 
 // GracefulShutdown makes sure all resources are released properly when the client is shutting down
 func (c *Client) GracefulShutdown() {
-    log.Infof("action: client_shutdown | result: in_progress | client_id: %v", c.config.ID)
-    
-    if c.conn != nil {
-        log.Infof("action: close_connection | result: success | client_id: %v", c.config.ID)
-        c.conn.Close()
-    }
-    
-    log.Infof("action: client_shutdown | result: success | client_id: %v", c.config.ID)
-    os.Exit(0)
+	log.Infof("action: client_shutdown | result: in_progress | client_id: %v", c.config.ID)
+
+	if c.conn != nil {
+		log.Infof("action: close_connection | result: success | client_id: %v", c.config.ID)
+		c.conn.Close()
+	}
+
+	if c.batchReader != nil {
+		c.batchReader.Close()
+	}
+
+	log.Infof("action: client_shutdown | result: success | client_id: %v", c.config.ID)
+	os.Exit(0)
 }
