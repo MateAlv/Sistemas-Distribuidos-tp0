@@ -45,7 +45,7 @@ class Server:
                 
                 response = SUCCESS_RESPONSE + MESSAGE_DELIMITER
                 self.__send_complete_message(client_sock, response)
-                
+
             except ValueError as parse_error:
                 logging.error(f'action: apuesta_recibida | result: fail | cantidad: ?')
                 
@@ -130,7 +130,6 @@ class Server:
             except OSError:
                 raise 
         
-        # Decode complete message (remove final delimiter)
         message = buffer.rstrip(b'\n').decode('utf-8')
         return message
 
