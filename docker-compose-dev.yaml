@@ -16,18 +16,13 @@ services:
     entrypoint: /client
     environment:
       - CLI_ID=1
-      - NOMBRE=Mate
-      - APELLIDO=Alvarez
-      - DOCUMENTO=43084759
-      - NACIMIENTO=2001-01-12
-      - NUMERO=7574
     networks:
       - testing_net
     depends_on:
       - server
     volumes:
       - ./client/config.yaml:/config.yaml
-      - ./.data/agency-1.csv:/data/agency.csv  
+      - ./.data/agency-1.csv:/data/agency.csv       
 networks:
   testing_net:
     ipam:
