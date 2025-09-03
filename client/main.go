@@ -11,6 +11,16 @@ import (
 	"github.com/7574-sistemas-distribuidos/docker-compose-init/client/common"
 )
 
+const (
+	DEFAULT_CSV_FILE_PATH = "/data/agency.csv"
+
+	PROTOCOL_FIELD_SEPARATOR   = ";"
+	PROTOCOL_BATCH_SEPARATOR   = "~"
+	PROTOCOL_MESSAGE_DELIMITER = "\n"
+	PROTOCOL_SUCCESS_RESPONSE  = "OK"
+	PROTOCOL_FAILURE_RESPONSE  = "FAIL"
+)
+
 var log = logging.MustGetLogger("log")
 
 // InitConfig Function that uses viper library to parse configuration parameters.
@@ -34,14 +44,7 @@ func InitConfig() (*viper.Viper, error) {
 	v.BindEnv("server", "address")
 	v.BindEnv("log", "level")
 
-	// Data related configuration
-	v.BindEnv("data", "file")
 	v.BindEnv("batch", "maxAmount")
-	v.BindEnv("protocol", "field_separator")
-	v.BindEnv("protocol", "batch_separator")
-	v.BindEnv("protocol", "message_delimiter")
-	v.BindEnv("protocol", "success_response")
-	v.BindEnv("protocol", "failure_response")
 
 	// Try to read configuration from config file. If config file
 	// does not exists then ReadInConfig will fail but configuration
@@ -106,11 +109,11 @@ func main() {
 		ID:            v.GetString("id"),
 		MessageProtocol: common.ProtocolConfig{
 			BatchSize:        v.GetInt("batch.maxAmount"),
-			FieldSeparator:   v.GetString("protocol.field_separator"),
-			BatchSeparator:   v.GetString("protocol.batch_separator"),
-			MessageDelimiter: v.GetString("protocol.message_delimiter"),
-			SuccessResponse:  v.GetString("protocol.success_response"),
-			FailureResponse:  v.GetString("protocol.failure_response"),
+			FieldSeparator:   PROTOCOL_FIELD_SEPARATOR,
+			BatchSeparator:   PROTOCOL_BATCH_SEPARATOR,
+			MessageDelimiter: PROTOCOL_MESSAGE_DELIMITER,
+			SuccessResponse:  PROTOCOL_SUCCESS_RESPONSE,
+			FailureResponse:  PROTOCOL_FAILURE_RESPONSE,
 		},
 	}
 
