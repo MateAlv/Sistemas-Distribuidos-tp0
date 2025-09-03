@@ -223,29 +223,21 @@ func (c *Client) sendFinishedAndGetWinners() ([]string, error) {
 
 	response = strings.TrimSpace(response)
 
+	if response == "N" {
+		return []string{}, nil
+	}
+
 	// Parse winners: "WINNERS:dni1~dni2~dni3" or "WINNERS:"
 	if !strings.HasPrefix(response, c.config.MessageProtocol.ProtocolWinnersResponse) {
 		return nil, fmt.Errorf("unexpected response format: %s", response)
 	}
 
 	winnersData := strings.TrimPrefix(response, c.config.MessageProtocol.ProtocolWinnersResponse)
-	if winnersData == "" {
-		return []string{}, nil // No winners
-	}
 
-	// Split by batch separator (assumed to be "~")
+	// Split by batch separator
 	winners := strings.Split(winnersData, c.config.MessageProtocol.BatchSeparator)
 
-	// Filter out any empty strings that may result from splitting
-	var filteredWinners []string
-	for _, winner := range winners {
-		winner = strings.TrimSpace(winner)
-		if winner != "" {
-			filteredWinners = append(filteredWinners, winner)
-		}
-	}
-
-	return filteredWinners, nil
+	return winners, nil
 }
 
 // GracefulShutdown makes sure all resources are released properly when the client is shutting down

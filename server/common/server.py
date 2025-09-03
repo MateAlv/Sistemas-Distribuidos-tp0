@@ -10,6 +10,7 @@ SUCCESS_RESPONSE = "OK"
 FAILURE_RESPONSE = "FAIL"
 FINISHED_MESSAGE = "FINISHED"
 WINNERS_PREFIX = "WINNERS:"
+NO_WINNERS_RESPONSE = "N"
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -125,7 +126,7 @@ class Server:
         if winning_dnis:
             response = WINNERS_PREFIX + BATCH_SEPARATOR.join(winning_dnis)
         else:
-            response = WINNERS_PREFIX
+            response = NO_WINNERS_RESPONSE  # Indicate no winners for this agency, poor client 3 :(
             
         self.__send_complete_message(client_sock, response)
         
