@@ -235,7 +235,17 @@ func (c *Client) sendFinishedAndGetWinners() ([]string, error) {
 
 	// Split by batch separator (assumed to be "~")
 	winners := strings.Split(winnersData, c.config.MessageProtocol.BatchSeparator)
-	return winners, nil
+
+	// Filter out any empty strings that may result from splitting
+	var filteredWinners []string
+	for _, winner := range winners {
+		winner = strings.TrimSpace(winner)
+		if winner != "" {
+			filteredWinners = append(filteredWinners, winner)
+		}
+	}
+
+	return filteredWinners, nil
 }
 
 // GracefulShutdown makes sure all resources are released properly when the client is shutting down
