@@ -66,7 +66,7 @@ def load_bets() -> list[Bet]:
 def load_winning_bets(agency: int) -> list[str]:
     """
     Loads only the winning bets DNIs for a specific agency from STORAGE_FILEPATH.
-    Returns list of DNIs (documents) of winners for the given agency.
+    Returns list of DNIs of winners for the given agency.
     Memory efficient - filters while reading, doesn't load all bets.
     Not thread-safe/process-safe.
     """
@@ -77,14 +77,11 @@ def load_winning_bets(agency: int) -> list[str]:
             reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
             for row in reader:
                 if len(row) >= BET_PARTS_COUNT:
-                    # Extract fields: [agency, first_name, last_name, document, birthdate, number]
-                    bet_agency = int(row[0])
-                    bet_number = int(row[5])
-                    bet_document = row[3]
+                    bet = Bet(row[0], row[1], row[2], row[3], row[4], row[5])
                     
-                    # Filter: only this agency AND winning number
-                    if bet_agency == agency and bet_number == LOTTERY_WINNER_NUMBER:
-                        winning_dnis.append(bet_document)
+                    # Filter: only this agency AND winning number is returned
+                    if bet.agency == agency and has_won(bet):
+                        winning_dnis.append(bet.document)
                         
     except FileNotFoundError:
         logging.warning(f"action: load_winning_bets | agency: {agency} | result: file_not_found")
