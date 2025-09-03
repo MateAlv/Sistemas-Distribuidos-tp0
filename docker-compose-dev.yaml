@@ -23,6 +23,32 @@ services:
     volumes:
       - ./client/config.yaml:/config.yaml
       - ./.data/agency-1.csv:/data/agency.csv       
+  client2:
+    container_name: client2
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=2
+    networks:
+      - testing_net
+    depends_on:
+      - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
+      - ./.data/agency-2.csv:/data/agency.csv       
+  client3:
+    container_name: client3
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=3
+    networks:
+      - testing_net
+    depends_on:
+      - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
+      - ./.data/agency-3.csv:/data/agency.csv       
 networks:
   testing_net:
     ipam:

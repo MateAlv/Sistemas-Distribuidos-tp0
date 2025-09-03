@@ -10,7 +10,7 @@ fi
 OUTPUT_FILE="$1"
 CLIENT_NUMBER="$2"
 
-cat > "$OUTPUT_FILE" <<'YAML'
+cat > "$OUTPUT_FILE" <<YAML
 name: tp0
 services:
   server:
@@ -19,12 +19,12 @@ services:
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
+      - CLI_CLIENTS=${CLIENT_NUMBER}
     networks:
       - testing_net
     volumes:
       - ./server/config.ini:/config.ini
 YAML
-
 
 for ((i=1; i<=CLIENT_NUMBER; i++)); do 
 cat >> "$OUTPUT_FILE" <<YAML
