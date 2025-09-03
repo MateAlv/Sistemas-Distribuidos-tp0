@@ -43,7 +43,7 @@ class Server:
                 try:
                     client_sock, addr = self._server_socket.accept()
                     
-                    # Create thread to handle client (Exercise 8: parallel processing)
+                    # Create thread to handle client
                     client_thread = threading.Thread(
                         target=self.__handle_client_connection,
                         args=(client_sock,)
@@ -159,17 +159,15 @@ class Server:
         """
         Send complete message, ensuring all bytes are sent.
         """
-        data = message.encode('utf-8')
+        full_message = message + MESSAGE_DELIMITER.decode('utf-8')  # "WINNERS:dni1~dni2\n"
+        data = full_message.encode('utf-8')
         total_sent = 0
         
         while total_sent < len(data):
-            try:
-                sent = client_sock.send(data[total_sent:])
-                if sent == 0:
-                    raise OSError("Socket connection broken")
-                total_sent += sent
-            except OSError:
-                raise 
+            sent = client_sock.send(data[total_sent:])
+            if sent == 0:
+                raise OSError("Socket connection broken")
+            total_sent += sent
 
     def _begin_shutdown(self, signum, frame):
         """

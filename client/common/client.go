@@ -108,8 +108,14 @@ func (c *Client) SendBatch(bets []*Bet) error {
 	}
 }
 
-// StartClientLoop processes CSV file in batches using internal reader
+// StartClientLoop processes CSV file in batches using internal reader and receives the winners list at the end
 func (c *Client) StartClientLoop() error {
+	// Create persistent connection
+	if err := c.createClientSocket(); err != nil {
+		return err
+	}
+	defer c.conn.Close()
+
 	go func() {
 		<-c.sigChan
 		log.Infof("action: sigterm_received | result: success | client_id: %v", c.config.ID)
@@ -118,7 +124,7 @@ func (c *Client) StartClientLoop() error {
 
 	batchNumber := 0
 
-	// Process batches using internal reader
+	// Process all batches on same connection
 	for {
 		batch, err := c.batchReader.ReadNextBatch()
 		if err != nil {
@@ -130,17 +136,19 @@ func (c *Client) StartClientLoop() error {
 		}
 
 		batchNumber++
-		log.Infof("action: batch_prepared | result: success | batch_number: %d | size: %d",
-			batchNumber, len(batch))
-
-		if err := c.SendBatch(batch); err != nil {
+		if err := c.sendBatch(batch); err != nil {
 			return fmt.Errorf("failed to send batch %d: %v", batchNumber, err)
 		}
 	}
 
-	lineNumber, totalRead := c.batchReader.GetStats()
-	log.Infof("action: file_processed | result: success | total_batches: %d | total_bets: %d | lines_read: %d",
-		batchNumber, totalRead, lineNumber)
+	// Send FINISHED and get winners on same connection
+	winners, err := c.sendFinishedAndGetWinners()
+	if err != nil {
+		return fmt.Errorf("failed to get winners: %v", err)
+	}
+
+	// Log winners count
+	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d", len(winners))
 
 	return nil
 }
@@ -173,43 +181,61 @@ func (c *Client) SendFinishedNotification() error {
 	return nil
 }
 
-func (c *Client) sendMessageAndReceiveResponse(message string) (string, error) {
-	err := c.createClientSocket()
+func (c *Client) sendBatch(bets []*Bet) error {
+	batchData := c.batchReader.SerializeBatch(bets)
+	message := batchData + c.config.MessageProtocol.MessageDelimiter
+
+	_, err := c.conn.Write([]byte(message))
 	if err != nil {
-		return "", fmt.Errorf("failed to create socket: %v", err)
-	}
-	defer c.conn.Close()
-
-	// Send message
-	fullMessage := message + c.config.MessageProtocol.MessageDelimiter
-	if _, err := c.conn.Write([]byte(fullMessage)); err != nil {
-		return "", fmt.Errorf("failed to send message: %v", err)
+		return fmt.Errorf("failed to send batch: %v", err)
 	}
 
-	// Read response in chunks until delimiter
-	var response strings.Builder
-	buffer := make([]byte, 256) // Reasonable chunk size
-	delimiter := c.config.MessageProtocol.MessageDelimiter
-
-	for {
-		n, err := c.conn.Read(buffer)
-		if err != nil {
-			return "", fmt.Errorf("failed to read response: %v", err)
-		}
-
-		chunk := string(buffer[:n])
-		response.WriteString(chunk)
-
-		// Check if we have complete message
-		if strings.Contains(response.String(), delimiter) {
-			break
-		}
+	// Read response
+	response, err := bufio.NewReader(c.conn).ReadString('\n')
+	if err != nil {
+		return err
 	}
 
-	// Extract message before delimiter
-	result := response.String()
-	delimiterPos := strings.Index(result, delimiter)
-	return result[:delimiterPos], nil
+	response = strings.TrimSpace(response)
+	if response != c.config.MessageProtocol.SuccessResponse {
+		return fmt.Errorf("server rejected batch: %s", response)
+	}
+
+	log.Infof("action: apuesta_enviada | result: success | cantidad: %d", len(bets))
+	return nil
+}
+
+func (c *Client) sendFinishedAndGetWinners() ([]string, error) {
+	// Send FINISHED message to server
+	message := c.config.MessageProtocol.ProtocolFinishedMessage +
+		c.config.MessageProtocol.MessageDelimiter +
+		c.config.MessageProtocol.MessageDelimiter
+
+	if _, err := c.conn.Write([]byte(message)); err != nil {
+		return nil, fmt.Errorf("failed to send finished: %v", err)
+	}
+
+	// Read winners response
+	response, err := bufio.NewReader(c.conn).ReadString('\n')
+	if err != nil {
+		return nil, fmt.Errorf("failed to read winners: %v", err)
+	}
+
+	response = strings.TrimSpace(response)
+
+	// Parse winners: "WINNERS:dni1~dni2~dni3" or "WINNERS:"
+	if !strings.HasPrefix(response, c.config.MessageProtocol.ProtocolWinnersResponse) {
+		return nil, fmt.Errorf("unexpected response format: %s", response)
+	}
+
+	winnersData := strings.TrimPrefix(response, c.config.MessageProtocol.ProtocolWinnersResponse)
+	if winnersData == "" {
+		return []string{}, nil // No winners
+	}
+
+	// Split by batch separator (assumed to be "~")
+	winners := strings.Split(winnersData, c.config.MessageProtocol.BatchSeparator)
+	return winners, nil
 }
 
 // GracefulShutdown makes sure all resources are released properly when the client is shutting down
