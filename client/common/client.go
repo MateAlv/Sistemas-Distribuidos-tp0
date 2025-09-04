@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -24,14 +25,10 @@ type ClientConfig struct {
 // ProtocolConfig holds message protocol configuration
 type ProtocolConfig struct {
 	BatchSize               int
-	FieldSeparator          string
 	BatchSeparator          string
 	MessageDelimiter        string
 	SuccessResponse         string
-	FailureResponse         string
 	ProtocolFinishedMessage string
-	ProtocolQueryWinners    string
-	ProtocolWinnersResponse string
 }
 
 // Client Entity that encapsulates how
@@ -66,11 +63,8 @@ func NewClient(config ClientConfig, csvFilePath string) (*Client, error) {
 func (c *Client) createClientSocket() error {
 	conn, err := net.Dial("tcp", c.config.ServerAddress)
 	if err != nil {
-		log.Criticalf(
-			"action: connect | result: fail | client_id: %v | error: %v",
-			c.config.ID,
-			err,
-		)
+		log.Criticalf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
+		return err
 	}
 	c.conn = conn
 	return nil
@@ -95,21 +89,19 @@ func (c *Client) SendBatch(bets []*Bet) error {
 		return fmt.Errorf("incomplete write: sent %d of %d bytes", bytesWritten, len(messageBytes))
 	}
 
-	response, err := bufio.NewReader(c.conn).ReadString(c.config.MessageProtocol.MessageDelimiter[0])
+	reader := bufio.NewReader(c.conn)
+	hdr, body, err := readTwoLines(reader, c.config.MessageProtocol.MessageDelimiter[0])
 	if err != nil {
 		log.Errorf("action: apuesta_enviada | result: fail | cantidad: %d | error: %v", len(bets), err)
 		return err
 	}
-
-	response = strings.TrimSpace(response)
-
-	if response == c.config.MessageProtocol.SuccessResponse {
-		log.Infof("action: apuesta_enviada | result: success | cantidad: %d", len(bets))
-		return nil
-	} else {
-		log.Errorf("action: apuesta_enviada | result: fail | cantidad: %d | server_response: %s", len(bets), response)
-		return fmt.Errorf("server rejected batch: %s", response)
+	if !strings.HasPrefix(hdr, "R:") || body != c.config.MessageProtocol.SuccessResponse {
+		log.Errorf("action: apuesta_enviada | result: fail | cantidad: %d | server_response: %s|%s", len(bets), hdr, body)
+		return fmt.Errorf("server rejected batch: %s|%s", hdr, body)
 	}
+	log.Infof("action: apuesta_enviada | result: success | cantidad: %d", len(bets))
+	return nil
+
 }
 
 // StartClientLoop processes CSV file in batches using internal reader and receives the winners list at the end
@@ -157,39 +149,6 @@ func (c *Client) StartClientLoop() error {
 	return nil
 }
 
-func (c *Client) SendFinishedNotification() ([]string, error) {
-	if err := c.createClientSocket(); err != nil {
-		return nil, err
-	}
-	defer c.conn.Close()
-
-	message := c.config.MessageProtocol.ProtocolFinishedMessage + c.config.MessageProtocol.MessageDelimiter
-
-	messageBytes := []byte(message)
-	bytesWritten, err := c.conn.Write(messageBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send finished: %v", err)
-	}
-	if bytesWritten != len(messageBytes) {
-		return nil, fmt.Errorf("incomplete write: sent %d of %d bytes", bytesWritten, len(messageBytes))
-	}
-
-	// Read response
-	response := make([]byte, 1024)
-	n, err := c.conn.Read(response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read finished response: %v", err)
-	}
-
-	responseStr := strings.TrimSpace(string(response[:n]))
-	if responseStr != c.config.MessageProtocol.SuccessResponse {
-		return nil, fmt.Errorf("server rejected finished notification: %s", responseStr)
-	}
-
-	log.Infof("action: finished_notification_sent | result: success")
-	return nil, nil
-}
-
 func (c *Client) sendBatch(bets []*Bet) error {
 	batchData := c.batchReader.SerializeBatch(bets)
 	message := batchData + c.config.MessageProtocol.MessageDelimiter
@@ -200,14 +159,14 @@ func (c *Client) sendBatch(bets []*Bet) error {
 	}
 
 	// Read response
-	response, err := bufio.NewReader(c.conn).ReadString('\n')
+	reader := bufio.NewReader(c.conn)
+	hdr, body, err := readTwoLines(reader, c.config.MessageProtocol.MessageDelimiter[0])
 	if err != nil {
 		return err
 	}
-
-	response = strings.TrimSpace(response)
-	if response != c.config.MessageProtocol.SuccessResponse {
-		return fmt.Errorf("server rejected batch: %s", response)
+	if !strings.HasPrefix(hdr, "R:") || body != c.config.MessageProtocol.SuccessResponse {
+		log.Infof("action: apuesta_enviada | result: failure | cantidad: %d", len(bets))
+		return fmt.Errorf("server rejected batch: %s|%s", hdr, body)
 	}
 
 	log.Infof("action: apuesta_enviada | result: success | cantidad: %d", len(bets))
@@ -215,37 +174,40 @@ func (c *Client) sendBatch(bets []*Bet) error {
 }
 
 func (c *Client) sendFinishedAndGetWinners() ([]string, error) {
-	// Send FINISHED message to server
-	message := c.config.MessageProtocol.ProtocolFinishedMessage +
-		c.config.MessageProtocol.MessageDelimiter +
-		c.config.MessageProtocol.MessageDelimiter
+	// Send FINISHED (2 líneas): F:1\nFINISHED\n
+	message := "F:1" + c.config.MessageProtocol.MessageDelimiter +
+		c.config.MessageProtocol.ProtocolFinishedMessage + c.config.MessageProtocol.MessageDelimiter
 
 	if _, err := c.conn.Write([]byte(message)); err != nil {
 		return nil, fmt.Errorf("failed to send finished: %v", err)
 	}
 
-	// Read winners response
-	response, err := bufio.NewReader(c.conn).ReadString('\n')
+	// Read winners response: W:<count>\n<body>\n
+	reader := bufio.NewReader(c.conn)
+	hdr, body, err := readTwoLines(reader, c.config.MessageProtocol.MessageDelimiter[0])
 	if err != nil {
 		return nil, fmt.Errorf("failed to read winners: %v", err)
 	}
 
-	response = strings.TrimSpace(response)
+	if !strings.HasPrefix(hdr, "W:") {
+		return nil, fmt.Errorf("unexpected winners header: %s", hdr)
+	}
 
-	if response == "N" {
+	countStr := strings.TrimPrefix(hdr, "W:")
+	count, err := strconv.Atoi(strings.TrimSpace(countStr))
+	if err != nil {
+		return nil, fmt.Errorf("invalid winners count in header %q: %v", hdr, err)
+	}
+
+	if count == 0 {
+		// Body debe ser "N"
 		return []string{}, nil
 	}
 
-	// Parse winners: "WINNERS:dni1~dni2~dni3" or "WINNERS:"
-	if !strings.HasPrefix(response, c.config.MessageProtocol.ProtocolWinnersResponse) {
-		return nil, fmt.Errorf("unexpected response format: %s", response)
-	}
-
-	winnersData := strings.TrimPrefix(response, c.config.MessageProtocol.ProtocolWinnersResponse)
-
-	// Split by batch separator
-	winners := strings.Split(winnersData, c.config.MessageProtocol.BatchSeparator)
-
+	// Body = "dni1~dni2~...~dnik"
+	winners := strings.Split(strings.TrimSpace(body), c.config.MessageProtocol.BatchSeparator)
+	// Si querés ser más papista que el papa, podés chequear mismatch:
+	// if len(winners) != count { log.Warningf("...") }
 	return winners, nil
 }
 
@@ -264,4 +226,16 @@ func (c *Client) GracefulShutdown() {
 
 	log.Infof("action: client_shutdown | result: success | client_id: %v", c.config.ID)
 	os.Exit(0)
+}
+
+func readTwoLines(r *bufio.Reader, delim byte) (string, string, error) {
+	header, err := r.ReadString(delim)
+	if err != nil {
+		return "", "", err
+	}
+	body, err := r.ReadString(delim)
+	if err != nil {
+		return "", "", err
+	}
+	return strings.TrimSpace(header), strings.TrimSpace(body), nil
 }
