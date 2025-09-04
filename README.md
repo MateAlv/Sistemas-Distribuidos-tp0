@@ -14,16 +14,13 @@ Los mensajes informativos gestionan el control de flujo y la sincronización ent
 Los mensajes de datos transportan la información de negocio del sistema. Comprenden los lotes de apuestas (S:<cantidad> seguido de datos serializados) enviados del cliente al servidor, y las listas de ganadores (WINNERS:<dnis>) retornadas del servidor a cada cliente después del sorteo.
 
 ### Mensajes Cliente → Servidor
-### Bets - S:<CANTIDAD> \n <DATOS> 
-- HEADER: S
-Mensaje de header que indica el inicio de un lote de apuestas
+
+- Bets - S:<CANTIDAD> \n <DATOS> 
+El header indica el inicio de un lote de apuestas
 La cantidad especifica exactamente cuántas apuestas contiene el lote
 Permite al servidor pre-dimensionar buffers y validar integridad del mensaje
-
-- PAYLOAD: 
-Contiene la información serializada de múltiples apuestas en un solo mensaje
-Formato: agency;nombre;apellido;dni;fecha_nacimiento;numero_apostado
-Se envía inmediatamente después del header S:<CANTIDAD>
+El payload, se separa del header por un NEWLINE y tiene la información serializada de múltiples apuestas en un solo mensaje-
+Formato payload: agency;nombre;apellido;dni;fecha_nacimiento;numero_apostado
 
 - FINISHED
 Mensaje de control que notifica al servidor que el cliente terminó de enviar todas sus apuestas
