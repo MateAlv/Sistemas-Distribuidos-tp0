@@ -16,7 +16,7 @@ En el presente repositorio se provee una implementación básica de una arquitec
           │                      │                      │                                      
           └──────────────────────┼──────────────────────┘                                                                    
                                  │                                                                
-                    ┌─────────────▼─────────────┐
+                    ┌─────────────▼─────────────┐                                                                             
                     │         SERVER            │                                             
                     │      (Puerto 12345)       │                                   
                     │                           │                                
