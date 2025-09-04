@@ -81,13 +81,9 @@ func (c *Client) SendBatch(bets []*Bet) error {
 	batchData := c.batchReader.SerializeBatch(bets)
 	message := batchData + c.config.MessageProtocol.MessageDelimiter
 
-	messageBytes := []byte(message)
-	bytesWritten, err := c.conn.Write(messageBytes)
+	err := writeAll(c.conn, []byte(message))
 	if err != nil {
 		return fmt.Errorf("failed to send batch: %v", err)
-	}
-	if bytesWritten != len(messageBytes) {
-		return fmt.Errorf("incomplete write: sent %d of %d bytes", bytesWritten, len(messageBytes))
 	}
 
 	reader := bufio.NewReader(c.conn)
@@ -154,7 +150,7 @@ func (c *Client) sendBatch(bets []*Bet) error {
 	batchData := c.batchReader.SerializeBatch(bets)
 	message := batchData + c.config.MessageProtocol.MessageDelimiter
 
-	_, err := c.conn.Write([]byte(message))
+	err := writeAll(c.conn, []byte(message))
 	if err != nil {
 		return fmt.Errorf("failed to send batch: %v", err)
 	}
@@ -179,7 +175,7 @@ func (c *Client) sendFinishedAndGetWinners() ([]string, error) {
 	message := c.config.MessageProtocol.ProtocolFinishedHeader + "1" + c.config.MessageProtocol.MessageDelimiter +
 		c.config.MessageProtocol.ProtocolFinishedBody + c.config.MessageProtocol.MessageDelimiter
 
-	if _, err := c.conn.Write([]byte(message)); err != nil {
+	if err := writeAll(c.conn, []byte(message)); err != nil {
 		return nil, fmt.Errorf("failed to send finished: %v", err)
 	}
 
@@ -239,4 +235,17 @@ func readTwoLines(r *bufio.Reader, delim byte) (string, string, error) {
 		return "", "", err
 	}
 	return strings.TrimSpace(header), strings.TrimSpace(body), nil
+}
+
+// writeAll writes all bytes from p to conn, handling partial writes
+func writeAll(conn net.Conn, p []byte) error {
+	total := 0
+	for total < len(p) {
+		n, err := conn.Write(p[total:])
+		total += n
+		if err != nil {
+			return fmt.Errorf("writeAll: wrote=%d/%d: %w", total, len(p), err)
+		}
+	}
+	return nil
 }
