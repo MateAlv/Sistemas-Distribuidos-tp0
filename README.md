@@ -119,12 +119,18 @@ Servidor responde:
 
 ---
 
-# Sincronización
+# Concurrencia y Sincronización
 
-## Implementación de la Barrera de Sincronización
+## Sincronización entre threads - Barreras
 El sistema utiliza un Threading Barrier como mecanismo principal de sincronización para coordinar la ejecución del sorteo entre múltiples agencias. La barrera se inicializa en el servidor con el número exacto de clientes esperados, creando un punto de encuentro obligatorio donde todos los threads deben llegar antes de proceder con el sorteo. Cuando cada cliente completa el envío de todas sus apuestas, envía un mensaje FINISHED al servidor, lo que hace que su thread correspondiente llame al método wait() de la barrera. Este thread queda bloqueado hasta que todos los demás threads de cliente lleguen al mismo punto de sincronización. Una vez que el último cliente alcanza la barrera, todos los threads se desbloquean simultáneamente, garantizando que el sorteo se ejecute únicamente cuando todas las apuestas hayan sido procesadas y almacenadas.
 
 La barrera proporciona garantías críticas para la integridad del sistema: asegura que el sorteo ocurre exactamente una vez, previene condiciones de carrera en el acceso al archivo de apuestas, y garantiza que ningún cliente reciba resultados antes de que se complete el procesamiento global. El thread que obtiene el índice 0 al cruzar la barrera tiene la responsabilidad exclusiva de loggear el evento, mientras que los demás threads procesan inmediatamente los ganadores específicos de su agencia. Para prevenir deadlocks, la barrera incluye un timeout configurable de 120 segundos que permite al sistema recuperarse en caso de que algún cliente falle o se desconecte inesperadamente. Si se alcanza el timeout, los threads activos reciben una excepción que les permite manejar la situación de error de manera controlada, loggeando el problema y liberando recursos apropiadamente.
+
+### Manejo de acceso compartido a Archivos - Locks
+Además de la barrera, el sistema utiliza un **Lock** (mutua exclusión) para proteger el acceso concurrente al archivo de almacenamiento de apuestas (`bets.csv`). Dado que múltiples threads pueden intentar escribir apuestas al mismo tiempo, se emplea un `threading.Lock` que se adquiere antes de abrir y escribir en el archivo, y se libera inmediatamente después de finalizar la operación.  
+
+Este mecanismo garantiza que las operaciones de I/O sean atómicas y que las filas del CSV no se corrompan por escrituras intercaladas. Sin el uso de locks, podría ocurrir que dos hilos intenten escribir en el archivo simultáneamente, provocando pérdida o mezcla de datos.  
+
 
 ## Instrucciones de uso
 El repositorio cuenta con un **Makefile** que incluye distintos comandos en forma de targets. Los targets se ejecutan mediante la invocación de:  **make \<target\>**. Los target imprescindibles para iniciar y detener el sistema son **docker-compose-up** y **docker-compose-down**, siendo los restantes targets de utilidad para el proceso de depuración.
