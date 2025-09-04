@@ -20,7 +20,7 @@ const (
 
 	PROTOCOL_SUCCESS_BODY  = "OK"
 	PROTOCOL_FAILURE_BODY  = "FAIL"
-	PROTOCOL_FINISHED_BODY = "F"
+	PROTOCOL_FINISHED_BODY = "FINISHED"
 )
 
 var log = logging.MustGetLogger("log")
