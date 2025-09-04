@@ -118,43 +118,6 @@ Servidor responde:
   ```
 
 ---
-## Flujo:
-
-### Fase 1: Handshake y Conexión
-El cliente establece conexión TCP con el servidor en el puerto 12345. Una vez establecida la conexión, se mantiene activa durante toda la sesión para evitar overhead de múltiples handshakes.
-
-### Fase 2: Envío de Lotes de Apuestas
-Mensaje de Lote (Cliente → Servidor)
-El cliente envía las apuestas agrupadas en lotes para optimizar la comunicación de red. Cada mensaje de lote sigue esta estructura:
-
-Ejemplo Concreto:
-` S:3\n1;Juan;Perez;12345678;01-01-1990;1234~1;Maria;Lopez;87654321;02-02-1985;5678~1;Carlos;Garcia;11111111;03-03-1980;9012\n` 
-- S:3 indica que el servidor debe procesar 3 apuestas
-- El delimitador \n marca el fin del header
-- La primera apuesta corresponde a la agencia 1, Juan Pérez, DNI 12345678, nacido el 01-01-1990, apostando al número 1234
-- El separador ~ divide las apuestas dentro del mismo lote
-- La segunda apuesta es de María López, DNI 87654321, nacida el 02-02-1985, apostando al número 5678
-- La tercera apuesta es de Carlos García, DNI 11111111, nacido el 03-03-1980, apostando al número 9012
-- El delimitador \n final marca el fin del mensaje completo
-
-Respuesta de Confirmación (Servidor → Cliente)
-Para cada lote procesado exitosamente, el servidor responde con OK seguido del delimitador de mensaje. En casos excepcionales de error, responde con FAIL.
-
-### Fase 3: Notificación de Finalización y Sincronización
-Mensaje de Finalización (Cliente → Servidor)
-Cuando el cliente termina de enviar todos sus lotes de apuestas, envía un mensaje especial de finalización con doble delimitador que indica que no hay más datos por procesar y dispara la sincronización en el servidor.
-
-### Fase 4: Búsqueda y respuesta de Ganadores
-(Servidor → Cliente)
-Una vez que todos los clientes han enviado sus mensajes de finalización y se ejecuta el sorteo, el servidor responde con los DNIs de los ganadores correspondientes a cada agencia específica.
-
-Caso A: Con Ganadores El servidor envía el prefijo WINNERS: seguido de los DNIs ganadores separados por el separador de lotes y terminado con el delimitador de mensaje.
-Ejemplo:
-
-`WINNERS:12345678\~87654321\~11111111\n` 
-
-Caso B: Cuando una agencia no tiene ganadores, el servidor responde únicamente con la letra N seguida del delimitador.
-Mensaje: N\n
 
 # Sincronización
 
