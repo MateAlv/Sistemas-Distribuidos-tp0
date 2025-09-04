@@ -15,11 +15,11 @@ Los mensajes de datos transportan la información de negocio del sistema. Compre
 
 ### Mensajes Cliente → Servidor
 
-- Bets - S:<CANTIDAD> \n <DATOS> 
-El header indica el inicio de un lote de apuestas
-La cantidad especifica exactamente cuántas apuestas contiene el lote
-Permite al servidor pre-dimensionar buffers y validar integridad del mensaje
-El payload, se separa del header por un NEWLINE y tiene la información serializada de múltiples apuestas en un solo mensaje-
+- Bets - S:<SIZE> \n <DATA> 
+El header indica el inicio de un lote de apuestas.
+La cantidad <SIZE> especifica exactamente cuántas apuestas contiene el lote y permite al servidor pre-dimensionar buffers y validar integridad del mensaje.
+El payload, se separa del header por un NEWLINE y tiene la información serializada de múltiples apuestas en un solo mensaje.
+
 Formato payload: agency;nombre;apellido;dni;fecha_nacimiento;numero_apostado
 
 - FINISHED
