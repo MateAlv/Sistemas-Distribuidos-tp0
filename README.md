@@ -4,14 +4,8 @@
 
 En el presente repositorio se provee una implementación básica de una arquitectura cliente/servidor aplicada, en donde todas las dependencias del mismo se encuentran encapsuladas en containers. Se pueden distinguir 8 ramas que aluden a ejercicios incrementales que culminan en la creación de una aplicación de lotería centralizada en un servidor.
 
-## Protocolo de Comunicación:
-El protocolo implementado es basado en texto plano con encoding UTF-8, lo que facilita el debugging y garantiza compatibilidad cross-platform. Utiliza delimitadores jerárquicos para estructurar la información. Los mensajes se dividen en dos tipos: Informativos y Datos.
-
-### - Mensajes Informativos
-Los mensajes informativos gestionan el control de flujo y la sincronización entre cliente y servidor. Incluyen confirmaciones de procesamiento (OK/FAIL), notificaciones de finalización (FINISHED) y señalización de estados especiales (N para ausencia de ganadores).
-
-### - Mensajes de Datos
-Los mensajes de datos transportan la información de negocio del sistema. Comprenden los lotes de apuestas (S:<cantidad> seguido de datos serializados) enviados del cliente al servidor, y las listas de ganadores (WINNERS:<dnis>) retornadas del servidor a cada cliente después del sorteo.
+# Protocolo de Comunicación:
+El protocolo implementado es basado en texto plano con encoding UTF-8, lo que facilita el debugging y garantiza compatibilidad cross-platform. Utiliza delimitadores jerárquicos para estructurar la información. Los mensajes se dividen en dos tipos: Informativos y Datos. Los mensajes informativos gestionan el control de flujo y la sincronización entre cliente y servidor. Incluyen confirmaciones de procesamiento (OK/FAIL), notificaciones de finalización (FINISHED) y señalización de estados especiales (N para ausencia de ganadores). Los mensajes de datos transportan la información de negocio del sistema. Comprenden los lotes de apuestas (S:<cantidad> seguido de datos serializados) enviados del cliente al servidor, y las listas de ganadores (WINNERS:<dnis>) retornadas del servidor a cada cliente después del sorteo.
 
 ### Mensajes Cliente → Servidor
 
@@ -72,7 +66,7 @@ Separa el comando del contenido en mensajes estructurados
 Utilizado en S:<CANTIDAD> para separar el comando S del valor numérico
 Empleado en WINNERS:<lista> para separar el comando WINNERS de los datos
 
-### Flujo:
+## Flujo:
 
 ### Fase 1: Handshake y Conexión
 El cliente establece conexión TCP con el servidor en el puerto 12345. Una vez establecida la conexión, se mantiene activa durante toda la sesión para evitar overhead de múltiples handshakes.
@@ -109,6 +103,7 @@ WINNERS:12345678\~87654321\~11111111\n
 Caso B: Cuando una agencia no tiene ganadores, el servidor responde únicamente con la letra N seguida del delimitador.
 Mensaje: N\n
 
+# Sincronización
 
 ## Instrucciones de uso
 El repositorio cuenta con un **Makefile** que incluye distintos comandos en forma de targets. Los targets se ejecutan mediante la invocación de:  **make \<target\>**. Los target imprescindibles para iniciar y detener el sistema son **docker-compose-up** y **docker-compose-down**, siendo los restantes targets de utilidad para el proceso de depuración.
