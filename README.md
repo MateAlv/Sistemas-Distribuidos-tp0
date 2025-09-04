@@ -15,9 +15,9 @@ Los mensajes de datos transportan la información de negocio del sistema. Compre
 
 ### Mensajes Cliente → Servidor
 
-- Bets - S:<SIZE> \n <DATA> 
+- Bets - S:<AMOUNT> \n <BETS> 
 El header indica el inicio de un lote de apuestas.
-La cantidad <SIZE> especifica exactamente cuántas apuestas contiene el lote y permite al servidor pre-dimensionar buffers y validar integridad del mensaje.
+La cantidad <AMOUNT> especifica exactamente cuántas apuestas contiene el lote y permite al servidor pre-dimensionar buffers y validar integridad del mensaje.
 El payload, se separa del header por un NEWLINE y tiene la información serializada de múltiples apuestas en un solo mensaje.
 
 Formato payload: agency;nombre;apellido;dni;fecha_nacimiento;numero_apostado
@@ -40,12 +40,12 @@ Respuesta de error que indica problemas en el procesamiento del lote
 Se utiliza en casos excepcionales de error de parsing o almacenamiento
 Permite al cliente implementar lógica de retry si es necesario
 
-### WINNERS:<lista_dnis>
+- WINNERS:<lista_dnis>
 Respuesta final que contiene los DNIs de los ganadores para la agencia específica
 Se envía únicamente después de completarse el sorteo y la sincronización
 Incluye todos los DNIs ganadores separados por el delimitador de lotes
 
-### N
+- N
 Respuesta especial que indica ausencia de ganadores para la agencia
 Elimina ambigüedades de parsing al evitar mensajes WINNERS: vacíos
 Simplifica la lógica de procesamiento en el cliente
