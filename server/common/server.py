@@ -36,7 +36,6 @@ class Server:
 
         # Barrier and Locks for lottery synchronization
         self.lottery_barrier = threading.Barrier(expected_agencies)
-        self.file_lock = _FILE_LOCK
         
         logging.info(f"action: server_init | result: success | expected_agencies: {expected_agencies}")
         
@@ -97,7 +96,7 @@ class Server:
                     bets = deserialize_batch(msg)
                     if bets:
                         client_agency = bets[0].agency
-                        with self.file_lock:
+                        with _FILE_LOCK:
                             store_bets(bets)
                         logging.info(f"action: apuesta_recibida | result: success | cantidad: {len(bets)}")
                     self.__send_complete_message(client_sock, SUCCESS_RESPONSE)
@@ -121,28 +120,36 @@ class Server:
 
     def __handle_finished_and_return_winners(self, client_sock, client_agency):
         """Handle FINISHED message - wait for lottery and return winners"""
+        winning_dnis = [] 
         try:
-            # Wait for all agencies to reach this point
-            index = self.lottery_barrier.wait(timeout=120)
-            
-            if index == 0:  # First past barrier logs lottery
-                logging.info("action: sorteo | result: success")
-                
-        except Exception as e:
-            logging.error(f"action: lottery_barrier_error | error: {e}")
-            
-        # Lottery is complete - load and return winners for this agency - THREAD SAFETY FIRST
-            with self.file_lock:
+            try:
+                # Wait for all agencies to reach this point
+                index = self.lottery_barrier.wait(timeout=120)
+                if index == 0:  # First past barrier logs lottery
+                    logging.info("action: sorteo | result: success")
+            except Exception as e:
+                logging.error(f"action: lottery_barrier_error | error: {e}")
+
+            # Lottery is complete - load and return winners for this agency - THREAD SAFETY FIRST
+            with _FILE_LOCK:
                 winning_dnis = load_winning_bets(client_agency)
-        
-        if winning_dnis:
-            response = WINNERS_PREFIX + BATCH_SEPARATOR.join(winning_dnis)
-        else:
-            response = NO_WINNERS_RESPONSE  # Indicate no winners for this agency, poor client 3 :(
-            
-        self.__send_complete_message(client_sock, response)
-        
-        logging.info(f"action: winners_sent | result: success | agency: {client_agency} | cant_ganadores: {len(winning_dnis)}")
+
+            if winning_dnis:
+                response = WINNERS_PREFIX + BATCH_SEPARATOR.join(winning_dnis)
+            else:
+                response = NO_WINNERS_RESPONSE  # Indicate no winners for this agency
+
+            self.__send_complete_message(client_sock, response)
+            logging.info(
+                f"action: winners_sent | result: success | agency: {client_agency} | cant_ganadores: {len(winning_dnis)}"
+            )
+
+        except Exception as e:
+            logging.error(f"action: client_handler_error | error: {e}")
+            try:
+                self.__send_complete_message(client_sock, FAILURE_RESPONSE)
+            except:
+                pass
 
     def __receive_complete_message(self, client_sock):
         """
