@@ -17,12 +17,10 @@ const (
 	PROTOCOL_FIELD_SEPARATOR   = ";"
 	PROTOCOL_BATCH_SEPARATOR   = "~"
 	PROTOCOL_MESSAGE_DELIMITER = "\n"
-	PROTOCOL_SUCCESS_RESPONSE  = "OK"
-	PROTOCOL_FAILURE_RESPONSE  = "FAIL"
 
-	PROTOCOL_FINISHED_MESSAGE = "FINISHED"
-	PROTOCOL_QUERY_WINNERS    = "QUERY_WINNERS"
-	PROTOCOL_WINNERS_RESPONSE = "WINNERS"
+	PROTOCOL_SUCCESS_BODY  = "OK"
+	PROTOCOL_FAILURE_BODY  = "FAIL"
+	PROTOCOL_FINISHED_BODY = "FINISHED"
 )
 
 var log = logging.MustGetLogger("log")
@@ -112,11 +110,11 @@ func main() {
 		ServerAddress: v.GetString("server.address"),
 		ID:            v.GetString("id"),
 		MessageProtocol: common.ProtocolConfig{
-			BatchSize:               v.GetInt("batch.maxAmount"),
-			BatchSeparator:          PROTOCOL_BATCH_SEPARATOR,
-			MessageDelimiter:        PROTOCOL_MESSAGE_DELIMITER,
-			SuccessResponse:         PROTOCOL_SUCCESS_RESPONSE,
-			ProtocolFinishedMessage: PROTOCOL_FINISHED_MESSAGE,
+			BatchSize:            v.GetInt("batch.maxAmount"),
+			BatchSeparator:       PROTOCOL_BATCH_SEPARATOR,
+			MessageDelimiter:     PROTOCOL_MESSAGE_DELIMITER,
+			SuccessResponse:      PROTOCOL_SUCCESS_BODY,
+			ProtocolFinishedBody: PROTOCOL_FINISHED_BODY,
 		},
 	}
 
