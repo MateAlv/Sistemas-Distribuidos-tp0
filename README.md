@@ -6,7 +6,6 @@ En el presente repositorio se provee una implementación básica de una arquitec
 
 ## Protocolo de Comunicación:
 
-### Lista de Mensajes del Protocolo:
 
 ### Mensajes Cliente → Servidor
 
