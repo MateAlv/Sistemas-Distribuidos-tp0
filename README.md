@@ -76,7 +76,7 @@ Mensaje de Lote (Cliente → Servidor)
 El cliente envía las apuestas agrupadas en lotes para optimizar la comunicación de red. Cada mensaje de lote sigue esta estructura:
 
 Ejemplo Concreto:
-S:3\n1;Juan;Perez;12345678;01-01-1990;1234~1;Maria;Lopez;87654321;02-02-1985;5678~1;Carlos;Garcia;11111111;03-03-1980;9012\n
+` S:3\n1;Juan;Perez;12345678;01-01-1990;1234~1;Maria;Lopez;87654321;02-02-1985;5678~1;Carlos;Garcia;11111111;03-03-1980;9012\n` 
 - S:3 indica que el servidor debe procesar 3 apuestas
 - El delimitador \n marca el fin del header
 - La primera apuesta corresponde a la agencia 1, Juan Pérez, DNI 12345678, nacido el 01-01-1990, apostando al número 1234
@@ -98,7 +98,8 @@ Una vez que todos los clientes han enviado sus mensajes de finalización y se ej
 
 Caso A: Con Ganadores El servidor envía el prefijo WINNERS: seguido de los DNIs ganadores separados por el separador de lotes y terminado con el delimitador de mensaje.
 Ejemplo:
-WINNERS:12345678\~87654321\~11111111\n
+
+`WINNERS:12345678\~87654321\~11111111\n` 
 
 Caso B: Cuando una agencia no tiene ganadores, el servidor responde únicamente con la letra N seguida del delimitador.
 Mensaje: N\n
