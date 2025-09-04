@@ -5,27 +5,27 @@
 En el presente repositorio se provee una implementación básica de una arquitectura cliente/servidor aplicada, en donde todas las dependencias del mismo se encuentran encapsuladas en containers. Se pueden distinguir 8 ramas que aluden a ejercicios incrementales que culminan en la creación de una aplicación de lotería centralizada en un servidor.
 
 ## Arquitectura Cliente/Servidor:
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│    Client 1     │    │    Client 2     │    │    Client N     │
-│   (Agency 1)    │    │   (Agency 2)    │    │   (Agency N)    │
-│                 │    │                 │    │                 │
-│  - Procesa CSV  │    │  - Procesa CSV  │    │  - Procesa CSV  │
-│  - Envía lotes  │    │  - Envía lotes  │    │  - Envía lotes  │
-│  - Recibe wins  │    │  - Recibe wins  │    │  - Recibe wins  │
-└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐                              
+│    Client 1     │    │    Client 2     │    │    Client N     │                
+│   (Agency 1)    │    │   (Agency 2)    │    │   (Agency N)    │                     
+│                 │    │                 │    │                 │                          
+│  - Procesa CSV  │    │  - Procesa CSV  │    │  - Procesa CSV  │                           
+│  - Envía lotes  │    │  - Envía lotes  │    │  - Envía lotes  │                              
+│  - Recibe wins  │    │  - Recibe wins  │    │  - Recibe wins  │                                                 
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘                
+          │                      │                      │                                      
+          └──────────────────────┼──────────────────────┘                                                                    
+                                 │                                                                
                     ┌─────────────▼─────────────┐
-                    │         SERVER            │
-                    │      (Puerto 12345)       │
-                    │                           │
-                    │  - Recibe apuestas        │
-                    │  - Almacena en CSV        │ 
-                    │  - Barrera sincronización │
-                    │  - Ejecuta sorteo         │
-                    │  - Retorna ganadores      │
-                    └───────────────────────────┘
+                    │         SERVER            │                                             
+                    │      (Puerto 12345)       │                                   
+                    │                           │                                
+                    │  - Recibe apuestas        │                                     
+                    │  - Almacena en CSV        │                                            
+                    │  - Barrera sincronización │                                         
+                    │  - Ejecuta sorteo         │                                           
+                    │  - Retorna ganadores      │                                              
+                    └───────────────────────────┘                                                       
 
 ## Protocolo de Comunicación:
 
