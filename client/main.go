@@ -17,6 +17,7 @@ const (
 	PROTOCOL_FIELD_SEPARATOR   = ";"
 	PROTOCOL_BATCH_SEPARATOR   = "~"
 	PROTOCOL_MESSAGE_DELIMITER = "\n"
+	PROTOCOL_FINISHED_HEADER   = "F:"
 
 	PROTOCOL_SUCCESS_BODY  = "OK"
 	PROTOCOL_FAILURE_BODY  = "FAIL"
@@ -110,11 +111,12 @@ func main() {
 		ServerAddress: v.GetString("server.address"),
 		ID:            v.GetString("id"),
 		MessageProtocol: common.ProtocolConfig{
-			BatchSize:            v.GetInt("batch.maxAmount"),
-			BatchSeparator:       PROTOCOL_BATCH_SEPARATOR,
-			MessageDelimiter:     PROTOCOL_MESSAGE_DELIMITER,
-			SuccessResponse:      PROTOCOL_SUCCESS_BODY,
-			ProtocolFinishedBody: PROTOCOL_FINISHED_BODY,
+			BatchSize:              v.GetInt("batch.maxAmount"),
+			BatchSeparator:         PROTOCOL_BATCH_SEPARATOR,
+			MessageDelimiter:       PROTOCOL_MESSAGE_DELIMITER,
+			SuccessResponse:        PROTOCOL_SUCCESS_BODY,
+			ProtocolFinishedHeader: PROTOCOL_FINISHED_HEADER,
+			ProtocolFinishedBody:   PROTOCOL_FINISHED_BODY,
 		},
 	}
 

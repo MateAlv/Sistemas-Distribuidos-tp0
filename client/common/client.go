@@ -24,11 +24,12 @@ type ClientConfig struct {
 
 // ProtocolConfig holds message protocol configuration
 type ProtocolConfig struct {
-	BatchSize            int
-	BatchSeparator       string
-	MessageDelimiter     string
-	SuccessResponse      string
-	ProtocolFinishedBody string
+	BatchSize              int
+	BatchSeparator         string
+	MessageDelimiter       string
+	SuccessResponse        string
+	ProtocolFinishedHeader string
+	ProtocolFinishedBody   string
 }
 
 // Client Entity that encapsulates how
@@ -175,7 +176,7 @@ func (c *Client) sendBatch(bets []*Bet) error {
 
 func (c *Client) sendFinishedAndGetWinners() ([]string, error) {
 	// Send FINISHED (2 líneas): F:1\nFINISHED\n
-	message := c.config.MessageProtocol.ProtocolFinishedBody + ":1" + c.config.MessageProtocol.MessageDelimiter +
+	message := c.config.MessageProtocol.ProtocolFinishedHeader + "1" + c.config.MessageProtocol.MessageDelimiter +
 		c.config.MessageProtocol.ProtocolFinishedBody + c.config.MessageProtocol.MessageDelimiter
 
 	if _, err := c.conn.Write([]byte(message)); err != nil {
