@@ -51,28 +51,28 @@ Simplifica la lógica de procesamiento en el cliente
 
 ### Lista de Delimitadores del Protocolo
 ### Delimitadores de Nivel de Mensaje:
-- \n (newline) - MESSAGE_DELIMITER
+- \n (newline) - MESSAGE_DELIMITER - 
 Delimita mensajes completos en el protocolo de comunicación
 Indica el final de cada unidad de comunicación entre cliente y servidor
 Permite al receptor identificar cuándo un mensaje está completo para su procesamiento
 
-- \n\n (doble newline)
+- \n\n (doble newline) - 
 Delimitador especial utilizado únicamente con el mensaje FINISHED
 Indica que es un mensaje de control especial que requiere manejo diferenciado
 Señaliza al servidor que debe activar la lógica de sincronización
 Delimitadores de Nivel de Datos
 
-- ~ (tilde) - BATCH_SEPARATOR
+- ~ (tilde) - BATCH_SEPARATOR - 
 Separa múltiples apuestas dentro del mismo lote o mensaje
 Permite agrupar varias apuestas en una sola transmisión de red
 Facilita el parsing secuencial de apuestas individuales en el servidor
 
-- ; (punto y coma) - FIELD_SEPARATOR
+- ; (punto y coma) - FIELD_SEPARATOR - 
 Separa los campos individuales dentro de cada apuesta
 Delimita: agency, nombre, apellido, DNI, fecha de nacimiento, número apostado
 Permite la deserialización estructurada de cada apuesta individual
 
-- : (dos puntos)
+- : (dos puntos) - 
 Separa el comando del contenido en mensajes estructurados
 Utilizado en S:<CANTIDAD> para separar el comando S del valor numérico
 Empleado en WINNERS:<lista> para separar el comando WINNERS de los datos
