@@ -277,7 +277,56 @@ Modificar servidor y cliente para que ambos sistemas terminen de forma _graceful
 ``` 
 
 ## Resolución:
-Para lograr esto, 
+El servidor implementa un mecanismo para terminar de forma graceful al recibir SIGTERM, definiendo un handler (_begin_shutdown) que detiene el loop principal y cierra el socket del servidor. Además, tiene una función (__graceful_shutdown) que libera todos los sockets abiertos, tanto del servidor como de los clientes, y loguea el cierre de cada recurso. Esto cumple con el requisito de liberar los file descriptors antes de que termine el thread principal. Para cumplir completamente, debe asegurarse de registrar el handler de SIGTERM en el main y cerrar otros recursos (archivos, threads, procesos) si existen.
+``` 
+    def __accept_new_connection(self):
+        """
+        Accept new connections
+
+        Function blocks until a connection to a client is made.
+        Then connection created is printed and returned
+        """
+
+        # Connection arrived
+        logging.info('action: accept_connections | result: in_progress')
+        c, addr = self._server_socket.accept()
+        logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
+        return c
+
+    def _begin_shutdown(self, signum, frame):
+        """
+        Handle shutdown signal
+
+        If the server receives a SIGTERM signal, this handler ensures it
+        starts the shutdown process.
+        """
+        logging.info("action: sigterm_received | result: success")
+        self._running = False
+        if self._server_socket:
+            self._server_socket.close()
+
+    def __graceful_shutdown(self):
+        """
+        This function is called when the server is shutting down.
+        It ensures all resources are released properly.
+        """
+        logging.info("action: server_shutdown | result: in_progress")
+
+        try:
+            if self._server_socket:
+                self._server_socket.close()
+        except:
+            pass
+
+        for sock in self.__client_socks:
+            try:
+                logging.info("action: close_client_socket | result: success")
+                sock.close()
+            except:
+                pass
+
+        logging.info("action: server_shutdown | result: success")
+``` 
 
 ## Parte 2: Repaso de Comunicaciones
 
