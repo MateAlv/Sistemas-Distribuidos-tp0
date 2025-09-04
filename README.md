@@ -5,67 +5,119 @@
 En el presente repositorio se provee una implementación básica de una arquitectura cliente/servidor aplicada, en donde todas las dependencias del mismo se encuentran encapsuladas en containers. Se pueden distinguir 8 ramas que aluden a ejercicios incrementales que culminan en la creación de una aplicación de lotería centralizada en un servidor.
 
 # Protocolo de Comunicación:
-El protocolo implementado es basado en texto plano con encoding UTF-8, lo que facilita el debugging y garantiza compatibilidad cross-platform. Utiliza delimitadores jerárquicos para estructurar la información. Los mensajes se dividen en dos tipos: Informativos y Datos. Los mensajes informativos gestionan el control de flujo y la sincronización entre cliente y servidor. Incluyen confirmaciones de procesamiento (OK/FAIL), notificaciones de finalización (FINISHED) y señalización de estados especiales (N para ausencia de ganadores). Los mensajes de datos transportan la información de negocio del sistema. Comprenden los lotes de apuestas (S:<cantidad> seguido de datos serializados) enviados del cliente al servidor, y las listas de ganadores (WINNERS:<dnis>) retornadas del servidor a cada cliente después del sorteo.
+El protocolo implementado es basado en texto plano con encoding UTF-8, lo que facilita el debugging y garantiza compatibilidad cross-platform. Utiliza delimitadores jerárquicos para estructurar la información. Los mensajes **se definen siempre en dos líneas: un header y un body**.  
+
+- El **header** indica el tipo de mensaje y suele incluir un contador (`S:<n>`, `R:1`, `W:<k>`, `F:1`).  
+- El **body** contiene los datos (apuestas serializadas, DNIs de ganadores, “OK/FAIL”, “FINISHED”, o “N”).  
+
+Esto simplifica el parsing en cliente y servidor: todos esperan exactamente dos líneas por mensaje.
+
+---
 
 ### Mensajes Cliente → Servidor
 
-- Bets - ` S:<AMOUNT> <\n> <BETS>`
-El header indica el inicio de un lote de apuestas.
-La cantidad <AMOUNT> especifica exactamente cuántas apuestas contiene el lote y permite al servidor pre-dimensionar buffers y validar integridad del mensaje.
-El payload, se separa del header por un NEWLINE y tiene la información serializada de múltiples apuestas en un solo mensaje.
+- **Bets**  
+  ```
+  S:<AMOUNT>
+  bet1~bet2~...~betN
+  ```
+  El header indica el inicio de un lote de apuestas.  
+  `<AMOUNT>` especifica cuántas apuestas contiene el lote.  
+  El payload (`body`) contiene las apuestas serializadas, separadas por `~`.  
+  Cada apuesta se codifica como:  
+  `agency;nombre;apellido;dni;fecha_nacimiento;numero_apostado`
 
-Formato payload: agency;nombre;apellido;dni;fecha_nacimiento;numero_apostado
+- **FINISHED**  
+  ```
+  F:1
+  FINISHED
+  ```
+  Mensaje de control que notifica al servidor que el cliente terminó de enviar todas sus apuestas.  
+  Dispara la barrera de sincronización en el servidor.
 
-- FINISHED
-Mensaje de control que notifica al servidor que el cliente terminó de enviar todas sus apuestas
-Dispara el mecanismo de sincronización mediante threading barrier
-Indica que el cliente está listo para recibir los resultados del sorteo
+---
 
 ### Mensajes Servidor → Cliente
 
-- OK
-Respuesta de confirmación que indica procesamiento exitoso del lote recibido
-Confirma que todas las apuestas del lote fueron almacenadas correctamente
-Permite al cliente continuar con el siguiente lote
-FAIL
+- **ACK (éxito)**  
+  ```
+  R:1
+  OK
+  ```
+  Confirmación de que un lote fue procesado y almacenado correctamente.
 
-- FAIL
-Respuesta de error que indica problemas en el procesamiento del lote
-Se utiliza en casos excepcionales de error de parsing o almacenamiento
-Permite al cliente implementar lógica de retry si es necesario
+- **ACK (error)**  
+  ```
+  R:1
+  FAIL
+  ```
+  Indica que ocurrió un error procesando el lote.
 
-- WINNERS:<lista_dnis>
-Respuesta final que contiene los DNIs de los ganadores para la agencia específica
-Se envía únicamente después de completarse el sorteo y la sincronización
-Incluye todos los DNIs ganadores separados por el delimitador de lotes
+- **WINNERS**  
+  ```
+  W:<COUNT>
+  dni1~dni2~...~dniK
+  ```
+  Lista de DNIs ganadores para la agencia del cliente.  
+  `<COUNT>` indica la cantidad de DNIs en el body.
 
-- N
-Respuesta especial que indica ausencia de ganadores para la agencia
-Elimina ambigüedades de parsing al evitar mensajes WINNERS: vacíos
-Simplifica la lógica de procesamiento en el cliente
+- **SIN GANADORES**  
+  ```
+  W:0
+  N
+  ```
+  Se usa para agencias sin ganadores, evitando mensajes vacíos.
+
+---
 
 ### Lista de Delimitadores del Protocolo
-### Delimitadores de Nivel de Mensaje:
-- "\n" (newline) - MESSAGE_DELIMITER - 
-Delimita mensajes completos en el protocolo de comunicación
-Indica el final de cada unidad de comunicación entre cliente y servidor
-Permite al receptor identificar cuándo un mensaje está completo para su procesamiento
 
-- "~" - BATCH_SEPARATOR - 
-Separa múltiples apuestas dentro del mismo lote o mensaje
-Permite agrupar varias apuestas en una sola transmisión de red
-Facilita el parsing secuencial de apuestas individuales en el servidor
+- **"\n" (newline)** – separa header y body, y marca fin de cada mensaje.  
+- **"~"** – separa múltiples apuestas dentro de un lote, o múltiples DNIs en la respuesta de ganadores.  
+- **";"** – separa los campos individuales dentro de cada apuesta (`agency;nombre;apellido;dni;fecha;numero`).  
+- **":"** – separa el prefijo del valor en el header (`S:3`, `W:2`, etc.).
 
-- ";" (punto y coma) - FIELD_SEPARATOR - 
-Separa los campos individuales dentro de cada apuesta
-Delimita: agency, nombre, apellido, DNI, fecha de nacimiento, número apostado
-Permite la deserialización estructurada de cada apuesta individual
+---
 
-- ":" (dos puntos) - 
-Separa el comando del contenido en mensajes estructurados
-Utilizado en S:<CANTIDAD> para separar el comando S del valor numérico
-Empleado en WINNERS:<lista> para separar el comando WINNERS de los datos
+## Flujo:
 
+### Fase 1: Handshake y Conexión
+El cliente establece conexión TCP con el servidor en el puerto 12345. La conexión se mantiene durante toda la sesión.
+
+### Fase 2: Envío de Lotes de Apuestas
+Ejemplo:
+```
+S:3
+1;Juan;Perez;12345678;1990-01-01;1234~1;Maria;Lopez;87654321;1985-02-02;5678~1;Carlos;Garcia;11111111;1980-03-03;9012
+```
+Respuesta:
+```
+R:1
+OK
+```
+
+### Fase 3: Notificación de Finalización
+Cliente envía:
+```
+F:1
+FINISHED
+```
+El servidor espera a que todos los clientes lleguen a este punto (barrera).
+
+### Fase 4: Respuesta de Ganadores
+Servidor responde:
+- Caso A (con ganadores):
+  ```
+  W:3
+  12345678~87654321~11111111
+  ```
+- Caso B (sin ganadores):
+  ```
+  W:0
+  N
+  ```
+
+---
 ## Flujo:
 
 ### Fase 1: Handshake y Conexión
