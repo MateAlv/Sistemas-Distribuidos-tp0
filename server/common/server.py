@@ -7,13 +7,17 @@ from .utils import (deserialize_batch, store_bets, load_winning_bets, BATCH_SEPA
 # File lock for thread-safe file operations
 _FILE_LOCK = threading.Lock()
 
-# Message protocol constants
+# Message protocol constants (two-line messages everywhere)
 MESSAGE_DELIMITER = b"\n"
-SUCCESS_RESPONSE = "OK"
-FAILURE_RESPONSE = "FAIL"
-FINISHED_MESSAGE = "FINISHED"
-WINNERS_PREFIX = "WINNERS:"
-NO_WINNERS_RESPONSE = "N"
+
+BATCH_PREFIX    = "S:"   # header: S:<count>
+FINISHED_PREFIX = "F:"   # header: F:1          | body: FINISHED
+WINNERS_PREFIX  = "W:"   # header: W:<count>    | body: dni1~dni2 or 'N'
+RESP_PREFIX     = "R:"   # header: R:1          | body: OK/FAIL
+
+OK_BODY         = "OK"
+FAIL_BODY       = "FAIL"
+FINISHED_BODY   = "FINISHED"
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -88,27 +92,26 @@ class Server:
         
         try:
             while True:
-                msg = self.__receive_complete_message(client_sock)
-                if not msg:
-                    break
-                    
-                if msg.startswith("S:"):
-                    bets = deserialize_batch(msg)
+                # Receive a complete message (header + body)         
+                header, body = self.__receive_two_lines(client_sock)
+                if header.startswith(BATCH_PREFIX):
+                    # header = "S:<n>", body = "bet1~...~betN"
+                    bets = deserialize_batch(f"{header}\n{body}")
                     if bets:
                         client_agency = bets[0].agency
                         with _FILE_LOCK:
                             store_bets(bets)
                         logging.info(f"action: apuesta_recibida | result: success | cantidad: {len(bets)}")
-                    self.__send_complete_message(client_sock, SUCCESS_RESPONSE)
-                    
-                elif msg == "FINISHED":
-                    # Wait for all agencies, then return winners
+                    self.__send_message(client_sock, f"{RESP_PREFIX}1", OK_BODY)
+
+                elif header.startswith(FINISHED_PREFIX) and body == FINISHED_BODY:
+                    # header = "F:1", body = "FINISHED"
                     self.__handle_finished_and_return_winners(client_sock, client_agency)
-                    break  # Client disconnects after getting winners
-                    
+                    break
+
                 else:
-                    logging.warning(f"action: unknown_message | message: {msg}")
-                    self.__send_complete_message(client_sock, FAILURE_RESPONSE)
+                    logging.warning(f"action: unknown_message | header: {header} | body: {body}")
+                    self.__send_message(client_sock, f"{RESP_PREFIX}1", FAIL_BODY)
                     
         except Exception as e:
             logging.error(f"action: client_handler_error | error: {e}")
@@ -135,11 +138,14 @@ class Server:
                 winning_dnis = load_winning_bets(client_agency)
 
             if winning_dnis:
-                response = WINNERS_PREFIX + BATCH_SEPARATOR.join(winning_dnis)
+                header = f"{WINNERS_PREFIX}{len(winning_dnis)}"  # e.g., "W:3"
+                body   = BATCH_SEPARATOR.join(winning_dnis)      # "dni1~dni2~dni3"
             else:
-                response = NO_WINNERS_RESPONSE  # Indicate no winners for this agency
+                header = f"{WINNERS_PREFIX}0"                    # "W:0"
+                body   = "N"                                     # "N"
 
-            self.__send_complete_message(client_sock, response)
+            self.__send_message(client_sock, header, body)
+
             logging.info(
                 f"action: winners_sent | result: success | agency: {client_agency} | cant_ganadores: {len(winning_dnis)}"
             )
@@ -147,44 +153,46 @@ class Server:
         except Exception as e:
             logging.error(f"action: client_handler_error | error: {e}")
             try:
-                self.__send_complete_message(client_sock, FAILURE_RESPONSE)
+                self.__send_message(client_sock, f"{RESP_PREFIX}1", FAIL_BODY)  # "R:1\nFAIL\n"
             except:
                 pass
 
-    def __receive_complete_message(self, client_sock):
+    def __receive_line(self, client_sock, initial_buffer=b""):
         """
-        Receive complete batch message until final delimiter.
-        Handles multi-line messages (BATCH_SIZE:N\nbet1~bet2~bet3\n)
+        Read bytes from the socket until a newline ('\n') is found.
+        Returns (decoded_line, remaining_buffer).
         """
-        buffer = b""
-        lines_received = 0
-        expected_lines = 2  # Header + batch data
-        
-        while lines_received < expected_lines:
-            try:
-                chunk = client_sock.recv(1024)
-                if not chunk:
-                    raise OSError("Connection closed before complete message received")
-                buffer += chunk
-                
-                lines_received = buffer.count(MESSAGE_DELIMITER)
-                
-            except OSError:
-                raise 
-        
-        message = buffer.rstrip(b'\n').decode('utf-8')
-        return message
+        buffer = initial_buffer
+        while b"\n" not in buffer:
+            chunk = client_sock.recv(1024)
+            if not chunk:
+                raise OSError("Connection closed before complete line was received")
+            buffer += chunk
 
-    def __send_complete_message(self, client_sock, message):
+        newline_idx = buffer.find(b"\n")
+        line = buffer[:newline_idx].decode("utf-8").strip()
+        rest = buffer[newline_idx + 1:]
+        return line, rest
+
+    def __receive_two_lines(self, client_sock):
         """
-        Send complete message, ensuring all bytes are sent.
+        Receive exactly two lines (header + body) from the socket.
         """
-        full_message = message + MESSAGE_DELIMITER.decode('utf-8')  # "WINNERS:dni1~dni2\n"
-        data = full_message.encode('utf-8')
+        header, rest = self.__receive_line(client_sock)
+        body, _ = self.__receive_line(client_sock, initial_buffer=rest)
+        return header, body
+
+    def __send_message(self, client_sock, header: str, body: str):
+        """
+        Send two lines (header + body) ensuring all bytes are written.
+        Example:
+        "W:2\n12345678~87654321\n"
+        "W:0\nN\n"
+        """
+        full = f"{header}\n{body}\n".encode("utf-8")
         total_sent = 0
-        
-        while total_sent < len(data):
-            sent = client_sock.send(data[total_sent:])
+        while total_sent < len(full):
+            sent = client_sock.send(full[total_sent:])
             if sent == 0:
                 raise OSError("Socket connection broken")
             total_sent += sent

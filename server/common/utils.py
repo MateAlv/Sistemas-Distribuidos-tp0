@@ -57,7 +57,7 @@ def store_bets(bets: list[Bet]) -> None:
 Loads the information all the bets in the STORAGE_FILEPATH file.
 Not thread-safe/process-safe.
 """
-def load_bets() -> list[Bet]:
+def load_bets() -> list[Bet]: # type: ignore
     with open(STORAGE_FILEPATH, 'r') as file:
         reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
         for row in reader:
@@ -107,35 +107,30 @@ def deserialize_bet(bet_str: str) -> Bet:
 
 def deserialize_batch(message: str) -> list[Bet]:
     """
-    S:3
-    bet1~bet2~bet3
+    Expect:
+      S:<count>
+      bet1~bet2~...~betN
     """
     lines = message.strip().split('\n')
-    
     if len(lines) != 2:
         raise ValueError(f"Invalid batch format: expected 2 lines, got {len(lines)}")
-    
-    # Parse header
+
     header = lines[0]
     if not header.startswith(BATCH_HEADER_PREFIX):
         raise ValueError(f"Invalid batch header: {header}")
-    
+
     expected_count = int(header.split(":")[1])
-    
-    # Parse batch
+
     batch_data = lines[1]
     bets_str = batch_data.split(BATCH_SEPARATOR)
-    
+
     if len(bets_str) != expected_count:
         raise ValueError(f"Batch size mismatch: expected {expected_count}, got {len(bets_str)}")
-    
-    # Deserialize each bet
+
     bets = []
     for bet_str in bets_str:
         if bet_str.strip():
-            bet = deserialize_bet(bet_str.strip())
-            bets.append(bet)
-    
+            bets.append(deserialize_bet(bet_str.strip()))
     return bets
 
 def process_winning_bets(bets: list[Bet]) -> list[Bet]:
