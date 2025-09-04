@@ -5,7 +5,7 @@
 En el presente repositorio se provee una implementación básica de una arquitectura cliente/servidor aplicada, en donde todas las dependencias del mismo se encuentran encapsuladas en containers. Se pueden distinguir 8 ramas que aluden a ejercicios incrementales que culminan en la creación de una aplicación de lotería centralizada en un servidor.
 
 ## Protocolo de Comunicación:
-El protocolo implementado es basado en texto plano con encoding UTF-8, lo que facilita el debugging y garantiza compatibilidad cross-platform. Utiliza delimitadores jerárquicos para estructurar la información.
+El protocolo implementado es basado en texto plano con encoding UTF-8, lo que facilita el debugging y garantiza compatibilidad cross-platform. Utiliza delimitadores jerárquicos para estructurar la información. Los mensajes se dividen en dos tipos: Informativos y Datos.
 
 ### - Mensajes Informativos
 Los mensajes informativos gestionan el control de flujo y la sincronización entre cliente y servidor. Incluyen confirmaciones de procesamiento (OK/FAIL), notificaciones de finalización (FINISHED) y señalización de estados especiales (N para ausencia de ganadores).
