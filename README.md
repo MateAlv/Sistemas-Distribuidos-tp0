@@ -129,7 +129,7 @@ Los targets disponibles son:
 ### Ejercicio N°1:
 Definir un script de bash `generar-compose.sh` que permita crear una definición de Docker Compose con una cantidad configurable de clientes.  El nombre de los containers deberá seguir el formato propuesto: client1, client2, client3, etc. 
 
-## Resolución:
+### Resolución:
 El script deberá ubicarse está en la raíz del proyecto y recibe por parámetro el nombre del archivo de salida y la cantidad de clientes esperados:
 Decidí hacerlo en bash para consolidar conocimientos de hacer scripts, es bastante simple y se extendió todos los ejercicios:
 ```
@@ -191,7 +191,7 @@ YAML
 ### Ejercicio N°2:
 Modificar el cliente y el servidor para lograr que realizar cambios en el archivo de configuración no requiera reconstruír las imágenes de Docker para que los mismos sean efectivos. La configuración a través del archivo correspondiente (`config.ini` y `config.yaml`, dependiendo de la aplicación) debe ser inyectada en el container y persistida por fuera de la imagen (hint: `docker volumes`).
 
-## Resolución:
+### Resolución:
 Se agregaron los volumenes al script de generar compose con la sintaxis:
 ```
     volumes:
@@ -205,7 +205,7 @@ A su vez se corrigieron los Dockerfiles para no copiar estas rutas y poder almac
 ### Ejercicio N°3:
 Crear un script de bash `validar-echo-server.sh` que permita verificar el correcto funcionamiento del servidor utilizando el comando `netcat` para interactuar con el mismo. Dado que el servidor es un echo server, se debe enviar un mensaje al servidor y esperar recibir el mismo mensaje enviado.
 
-## Resolución:
+### Resolución:
 Ninguna magia acá, es un script que declara variables:
 - SERVER_PORT: puerto donde escucha el servidor.
 - SERVER_IP: nombre o IP del contenedor que corre el servidor.
@@ -233,6 +233,51 @@ fi
 
 ### Ejercicio N°4:
 Modificar servidor y cliente para que ambos sistemas terminen de forma _graceful_ al recibir la signal SIGTERM. Terminar la aplicación de forma _graceful_ implica que todos los _file descriptors_ (entre los que se encuentran archivos, sockets, threads y procesos) deben cerrarse correctamente antes que el thread de la aplicación principal muera. Loguear mensajes en el cierre de cada recurso (hint: Verificar que hace el flag `-t` utilizado en el comando `docker compose down`).
+
+## Resolución:
+
+
+``` 
+    def _begin_shutdown(self, signum, frame):
+        """
+        Handle shutdown signal
+
+        If the server receives a SIGTERM signal, this handler ensures it
+        starts the shutdown process.
+        """
+        logging.info("action: sigterm_received | result: success")
+        self._running = False
+        if self._server_socket:
+            self._server_socket.close()
+
+    def __graceful_shutdown(self):
+        """Wait for all client threads to finish"""
+        logging.info("action: shutdown | result: in_progress")
+        
+        # Stop accepting new connections
+        self._running = False
+        
+        # Close server socket if not already closed
+        try:
+            self._server_socket.close()
+        except:
+            pass
+            
+        # Wait for all client threads to complete their work
+        active_threads = [t for t in self.client_threads if t.is_alive()]
+        if active_threads:
+            logging.info(f"action: waiting_for_threads | count: {len(active_threads)}")
+            
+            for thread in active_threads:
+                thread.join(timeout=30)  # Wait max 30 seconds per thread
+                if thread.is_alive():
+                    logging.warning("action: thread_timeout | result: warning")
+
+        logging.info("action: server_shutdown | result: success")
+``` 
+
+## Resolución:
+Para lograr esto, 
 
 ## Parte 2: Repaso de Comunicaciones
 
