@@ -4,6 +4,139 @@
 
 En el presente repositorio se provee una implementación básica de una arquitectura cliente/servidor aplicada, en donde todas las dependencias del mismo se encuentran encapsuladas en containers. Se pueden distinguir 8 ramas que aluden a ejercicios incrementales que culminan en la creación de una aplicación de lotería centralizada en un servidor.
 
+## Arquitectura Cliente/Servidor:
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│    Client 1     │    │    Client 2     │    │    Client N     │
+│   (Agency 1)    │    │   (Agency 2)    │    │   (Agency N)    │
+│                 │    │                 │    │                 │
+│  - Procesa CSV  │    │  - Procesa CSV  │    │  - Procesa CSV  │
+│  - Envía lotes  │    │  - Envía lotes  │    │  - Envía lotes  │
+│  - Recibe wins  │    │  - Recibe wins  │    │  - Recibe wins  │
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌─────────────▼─────────────┐
+                    │         SERVER            │
+                    │      (Puerto 12345)       │
+                    │                           │
+                    │  - Recibe apuestas        │
+                    │  - Almacena en CSV        │ 
+                    │  - Barrera sincronización │
+                    │  - Ejecuta sorteo         │
+                    │  - Retorna ganadores      │
+                    └───────────────────────────┘
+
+## Protocolo de Comunicación:
+
+### Lista de Mensajes del Protocolo:
+
+### Mensajes Cliente → Servidor
+
+### S:<CANTIDAD> + Datos de Apuestas (Payload)
+### HEADER: 
+Mensaje de header que indica el inicio de un lote de apuestas
+La cantidad especifica exactamente cuántas apuestas contiene el lote
+Permite al servidor pre-dimensionar buffers y validar integridad del mensaje
+
+### PAYLOAD: 
+Contiene la información serializada de múltiples apuestas en un solo mensaje
+Formato: agency;nombre;apellido;dni;fecha_nacimiento;numero_apostado
+Se envía inmediatamente después del header S:<CANTIDAD>
+
+### FINISHED
+Mensaje de control que notifica al servidor que el cliente terminó de enviar todas sus apuestas
+Dispara el mecanismo de sincronización mediante threading barrier
+Indica que el cliente está listo para recibir los resultados del sorteo
+
+### Mensajes Servidor → Cliente
+
+### OK
+Respuesta de confirmación que indica procesamiento exitoso del lote recibido
+Confirma que todas las apuestas del lote fueron almacenadas correctamente
+Permite al cliente continuar con el siguiente lote
+FAIL
+
+### FAIL
+Respuesta de error que indica problemas en el procesamiento del lote
+Se utiliza en casos excepcionales de error de parsing o almacenamiento
+Permite al cliente implementar lógica de retry si es necesario
+
+### WINNERS:<lista_dnis>
+Respuesta final que contiene los DNIs de los ganadores para la agencia específica
+Se envía únicamente después de completarse el sorteo y la sincronización
+Incluye todos los DNIs ganadores separados por el delimitador de lotes
+
+### N
+Respuesta especial que indica ausencia de ganadores para la agencia
+Elimina ambigüedades de parsing al evitar mensajes WINNERS: vacíos
+Simplifica la lógica de procesamiento en el cliente
+
+### Lista de Delimitadores del Protocolo
+### Delimitadores de Nivel de Mensaje:
+- \n (newline) - MESSAGE_DELIMITER
+Delimita mensajes completos en el protocolo de comunicación
+Indica el final de cada unidad de comunicación entre cliente y servidor
+Permite al receptor identificar cuándo un mensaje está completo para su procesamiento
+
+- \n\n (doble newline)
+Delimitador especial utilizado únicamente con el mensaje FINISHED
+Indica que es un mensaje de control especial que requiere manejo diferenciado
+Señaliza al servidor que debe activar la lógica de sincronización
+Delimitadores de Nivel de Datos
+
+- ~ (tilde) - BATCH_SEPARATOR
+Separa múltiples apuestas dentro del mismo lote o mensaje
+Permite agrupar varias apuestas en una sola transmisión de red
+Facilita el parsing secuencial de apuestas individuales en el servidor
+
+- ; (punto y coma) - FIELD_SEPARATOR
+Separa los campos individuales dentro de cada apuesta
+Delimita: agency, nombre, apellido, DNI, fecha de nacimiento, número apostado
+Permite la deserialización estructurada de cada apuesta individual
+
+- : (dos puntos)
+Separa el comando del contenido en mensajes estructurados
+Utilizado en S:<CANTIDAD> para separar el comando S del valor numérico
+Empleado en WINNERS:<lista> para separar el comando WINNERS de los datos
+
+### Flujo:
+
+### Fase 1: Handshake y Conexión
+El cliente establece conexión TCP con el servidor en el puerto 12345. Una vez establecida la conexión, se mantiene activa durante toda la sesión para evitar overhead de múltiples handshakes.
+
+### Fase 2: Envío de Lotes de Apuestas
+Mensaje de Lote (Cliente → Servidor)
+El cliente envía las apuestas agrupadas en lotes para optimizar la comunicación de red. Cada mensaje de lote sigue esta estructura:
+
+Ejemplo Concreto:
+S:3\n1;Juan;Perez;12345678;01-01-1990;1234~1;Maria;Lopez;87654321;02-02-1985;5678~1;Carlos;Garcia;11111111;03-03-1980;9012\n
+- S:3 indica que el servidor debe procesar 3 apuestas
+- El delimitador \n marca el fin del header
+- La primera apuesta corresponde a la agencia 1, Juan Pérez, DNI 12345678, nacido el 01-01-1990, apostando al número 1234
+- El separador ~ divide las apuestas dentro del mismo lote
+- La segunda apuesta es de María López, DNI 87654321, nacida el 02-02-1985, apostando al número 5678
+- La tercera apuesta es de Carlos García, DNI 11111111, nacido el 03-03-1980, apostando al número 9012
+- El delimitador \n final marca el fin del mensaje completo
+
+Respuesta de Confirmación (Servidor → Cliente)
+Para cada lote procesado exitosamente, el servidor responde con OK seguido del delimitador de mensaje. En casos excepcionales de error, responde con FAIL.
+
+### Fase 3: Notificación de Finalización y Sincronización
+Mensaje de Finalización (Cliente → Servidor)
+Cuando el cliente termina de enviar todos sus lotes de apuestas, envía un mensaje especial de finalización con doble delimitador que indica que no hay más datos por procesar y dispara la sincronización en el servidor.
+
+### Fase 4: Búsqueda y respuesta de Ganadores
+(Servidor → Cliente)
+Una vez que todos los clientes han enviado sus mensajes de finalización y se ejecuta el sorteo, el servidor responde con los DNIs de los ganadores correspondientes a cada agencia específica.
+
+Caso A: Con Ganadores El servidor envía el prefijo WINNERS: seguido de los DNIs ganadores separados por el separador de lotes y terminado con el delimitador de mensaje.
+Ejemplo:
+WINNERS:12345678~87654321~11111111\n
+
+Caso B: Cuando una agencia no tiene ganadores, el servidor responde únicamente con la letra N seguida del delimitador.
+Mensaje: N\n
+
 
 ## Instrucciones de uso
 El repositorio cuenta con un **Makefile** que incluye distintos comandos en forma de targets. Los targets se ejecutan mediante la invocación de:  **make \<target\>**. Los target imprescindibles para iniciar y detener el sistema son **docker-compose-up** y **docker-compose-down**, siendo los restantes targets de utilidad para el proceso de depuración.
