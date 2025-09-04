@@ -349,73 +349,94 @@ El servidor implementa un mecanismo para terminar de forma graceful al recibir S
         logging.info("action: server_shutdown | result: success")
 ``` 
 
-## Parte 2: Repaso de Comunicaciones
+## Parte 2 y 3 Repaso de Comunicaciones y Concurrencia
+### Flujo Cliente/Servidor
 
-Las secciones de repaso del trabajo práctico plantean un caso de uso denominado **Lotería Nacional**. Para la resolución de las mismas deberá utilizarse como base el código fuente provisto en la primera parte, con las modificaciones agregadas en el ejercicio 4.
+El flujo del sistema se desarrolla en tres etapas principales:
 
-### Ejercicio N°5:
-Modificar la lógica de negocio tanto de los clientes como del servidor para nuestro nuevo caso de uso.
+1. **Envío de apuestas:**  
+   Cada cliente (agencia) obtiene sus datos desde variables de entorno o archivos CSV y los serializa en mensajes siguiendo el protocolo definido. Estos mensajes se transmiten al servidor mediante sockets TCP.
 
-#### Cliente
-Emulará a una _agencia de quiniela_ que participa del proyecto. Existen 5 agencias. Deberán recibir como variables de entorno los campos que representan la apuesta de una persona: nombre, apellido, DNI, nacimiento, numero apostado (en adelante 'número'). Ej.: `NOMBRE=Santiago Lionel`, `APELLIDO=Lorca`, `DOCUMENTO=30904465`, `NACIMIENTO=1999-03-17` y `NUMERO=7574` respectivamente.
+2. **Confirmación del servidor:**  
+   El servidor recibe las apuestas, las valida y las persiste utilizando las funciones provistas (`store_bet(...)`). Tras cada operación exitosa, responde con un mensaje de confirmación (OK), o con FAIL en caso de error. De esta manera el cliente puede continuar o registrar un fallo.
 
-Los campos deben enviarse al servidor para dejar registro de la apuesta. Al recibir la confirmación del servidor se debe imprimir por log: `action: apuesta_enviada | result: success | dni: ${DNI} | numero: ${NUMERO}`.
+3. **Finalización y sorteo:**  
+   Una vez que los clientes notifican la finalización (FINISHED), el servidor activa la barrera de sincronización. Solo cuando todas las agencias han concluido, se ejecuta el sorteo, y el servidor responde a cada cliente con los resultados de su agencia. Así se evita entregar información parcial.
 
+---
 
+### Arquitectura Cliente/Servidor
 
-#### Servidor
-Emulará a la _central de Lotería Nacional_. Deberá recibir los campos de la cada apuesta desde los clientes y almacenar la información mediante la función `store_bet(...)` para control futuro de ganadores. La función `store_bet(...)` es provista por la cátedra y no podrá ser modificada por el alumno.
-Al persistir se debe imprimir por log: `action: apuesta_almacenada | result: success | dni: ${DNI} | numero: ${NUMERO}`.
+## **Cliente (Go):**  
+Implementa la lógica de una agencia de quiniela. Se encarga de preparar los datos, serializarlos, enviarlos en *batches* y recibir confirmaciones del servidor. Al finalizar, consulta los resultados de su agencia. Mantiene separada la lógica de dominio (apuestas) de la capa de comunicación (sockets y protocolo).
 
-#### Comunicación:
-Se deberá implementar un módulo de comunicación entre el cliente y el servidor donde se maneje el envío y la recepción de los paquetes, el cual se espera que contemple:
-* Definición de un protocolo para el envío de los mensajes.
-* Serialización de los datos.
-* Correcta separación de responsabilidades entre modelo de dominio y capa de comunicación.
-* Correcto empleo de sockets, incluyendo manejo de errores y evitando los fenómenos conocidos como [_short read y short write_](https://cs61.seas.harvard.edu/site/2018/FileDescriptors/).
+### Componentes del Cliente (GoLang)
 
+1. **Struct `Bet`**  
+   - Representa una apuesta individual.  
+   - Contiene los campos: `Agency`, `Name`, `LastName`, `Document`, `Birthdate`, `Number`.  
+   - Ofrece métodos de utilidad:  
+     - `Serialize()`: convierte la apuesta en un string siguiendo el protocolo.  
+     - `DeserializeBet()`: permite reconstruir una apuesta desde un string.  
+     - `IsValid()`: valida que los campos esenciales estén presentes.
 
-### Ejercicio N°6:
-Modificar los clientes para que envíen varias apuestas a la vez (modalidad conocida como procesamiento por _chunks_ o _batchs_). 
-Los _batchs_ permiten que el cliente registre varias apuestas en una misma consulta, acortando tiempos de transmisión y procesamiento.
+2. **Struct `BatchReader`**  
+   - Responsable de leer las apuestas desde un archivo CSV asociado a la agencia.  
+   - Maneja la lectura de forma incremental, devolviendo *batches* de apuestas hasta llegar al EOF.  
+   - Mantiene estadísticas internas (`lineNumber`, `totalRead` para manejar la lectura.  
+   - Implementa:  
+     - `ReadNextBatch()`: devuelve la siguiente tanda de apuestas.  
+     - `SerializeBatch()`: serializa un conjunto de apuestas para transmisión.  
+     - `Close()`: cierra el descriptor de archivo para evitar fugas de recursos.
 
-La información de cada agencia será simulada por la ingesta de su archivo numerado correspondiente, provisto por la cátedra dentro de `.data/datasets.zip`.
-Los archivos deberán ser inyectados en los containers correspondientes y persistido por fuera de la imagen (hint: `docker volumes`), manteniendo la convencion de que el cliente N utilizara el archivo de apuestas `.data/agency-{N}.csv` .
+3. **Configuración del Cliente (`ClientConfig`)**  
+   - Define los parámetros principales de ejecución:  
+     - `ServerAddress`: dirección del servidor.  
+     - `ID`: identificador de la agencia.  
+     - `MessageProtocol`: configuración del protocolo (batch size, delimitadores, mensajes de control).  
+   - Se obtiene a través de constantes en el archivo main.go  
+   - Permite flexibilidad sin modificar el código fuente, asegurando portabilidad y repetibilidad de experimentos.
 
-En el servidor, si todas las apuestas del *batch* fueron procesadas correctamente, imprimir por log: `action: apuesta_recibida | result: success | cantidad: ${CANTIDAD_DE_APUESTAS}`. En caso de detectar un error con alguna de las apuestas, debe responder con un código de error a elección e imprimir: `action: apuesta_recibida | result: fail | cantidad: ${CANTIDAD_DE_APUESTAS}`.
+## **Servidor (Python):**  
+Emula a la central de Lotería Nacional. Administra múltiples conexiones en paralelo con *multithreading*, garantizando consistencia mediante un `Lock` global en operaciones de archivo y una `Barrier` para sincronizar el sorteo. Responde a cada cliente según su agencia, sin hacer broadcasts generales, asegurando escalabilidad y coherencia.
+Esta arquitectura asegura robustez en la comunicación, correcta concurrencia en el servidor y simplicidad en el parsing de mensajes, dado que todo se organiza en mensajes de dos líneas (header + body).
 
-La cantidad máxima de apuestas dentro de cada _batch_ debe ser configurable desde config.yaml. Respetar la clave `batch: maxAmount`, pero modificar el valor por defecto de modo tal que los paquetes no excedan los 8kB. 
+### Componentes del Servidor (Python)
 
-Por su parte, el servidor deberá responder con éxito solamente si todas las apuestas del _batch_ fueron procesadas correctamente.
+1. **Clase `Server`**
+   - Expone el ciclo de vida del servidor: `__init__`, `run()`, `_begin_shutdown()`, `__graceful_shutdown()`.
+   - Acepta conexiones TCP (`socket.accept`) y crea un thread por cliente (`__handle_client_connection`).
+   - Mantiene una lista de threads activos y limpia terminados (`__cleanup_finished_threads`).
 
-### Ejercicio N°7:
+2. **Modelo de Concurrencia**
+   - **Multithreading**: un hilo por conexión para procesar mensajes en paralelo.
+   - **`threading.Lock` global (`_FILE_LOCK`)**: serializa secciones críticas de E/S sobre `bets.csv`.
+     - Protege **escritura** (`store_bets(...)`) y **lectura** de ganadores (`load_winning_bets(...)`).
+   - **`threading.Barrier` (`lottery_barrier`)**: sincroniza el **sorteo**; todos los clientes deben enviar `FINISHED` para continuar.
+     - El thread con índice `0` registra `action: sorteo | result: success`.
 
-Modificar los clientes para que notifiquen al servidor al finalizar con el envío de todas las apuestas y así proceder con el sorteo.
-Inmediatamente después de la notificacion, los clientes consultarán la lista de ganadores del sorteo correspondientes a su agencia.
-Una vez el cliente obtenga los resultados, deberá imprimir por log: `action: consulta_ganadores | result: success | cant_ganadores: ${CANT}`.
+3. **Capa de Comunicación (Protocolo de dos líneas)**
+   - **Recepción**: `__receive_two_lines()` y helper `__receive_line()` ensamblan siempre **header + body**.
+     - Batch: `"S:<n>"` + `"bet1~...~betN"`.
+     - Fin de envío: `"F:1"` + `"FINISHED"`.
+   - **Envío**: `__send_message(header, body)` garantiza **short-write safe** (loop hasta enviar todos los bytes).
+     - Respuesta de confirmación: `"R:1"` + `"OK"/"FAIL"`.
+     - Ganadores: `"W:<k>"` + `"dni1~...~dniK"` o `"W:0"` + `"N"`.
 
-El servidor deberá esperar la notificación de las 5 agencias para considerar que se realizó el sorteo e imprimir por log: `action: sorteo | result: success`.
-Luego de este evento, podrá verificar cada apuesta con las funciones `load_bets(...)` y `has_won(...)` y retornar los DNI de los ganadores de la agencia en cuestión. Antes del sorteo no se podrán responder consultas por la lista de ganadores con información parcial.
+4. **Lógica de Negocio**
+   - **Batches**: deserializa con `deserialize_batch(...)`, persiste con `store_bets(...)` (dentro de `with _FILE_LOCK:`).
+   - **FINISHED + Sorteo**: `__handle_finished_and_return_winners(...)` espera en la **Barrier**, luego obtiene DNIs con `load_winning_bets( agency)` (también bajo lock) y responde a **cada** cliente **solo** con sus ganadores (sin broadcast).
 
-Las funciones `load_bets(...)` y `has_won(...)` son provistas por la cátedra y no podrán ser modificadas por el alumno.
+5. **Persistencia y Utilidades (`utils.py`)**
+   - Tipos y helpers: `Bet`, `deserialize_bet(...)`, `deserialize_batch(...)`.
+   - E/S CSV: `store_bets(...)`, `load_winning_bets(...)` (lectura “streaming”, sin cargar todo en memoria).
 
-No es correcto realizar un broadcast de todos los ganadores hacia todas las agencias, se espera que se informen los DNIs ganadores que correspondan a cada una de ellas.
+6. **Observabilidad y Robustez**
+   - **Logging estructurado** (acciones/resultados) para trazabilidad: `apuesta_recibida`, `winners_sent`, `sorteo`, errores de cliente, etc.
+   - **Manejo de errores**: try/except a nivel de conexión; ante fallas responde `"R:1\nFAIL\n"` en lugar de cortar con EOF (mejor UX que el silencio… salvo que el silencio sea dorado).
+   - **Graceful shutdown**: handler de `SIGTERM` (`_begin_shutdown`) cierra el socket de escucha y `__graceful_shutdown()` hace `join` de threads.
+   - **Fds cerrados**: `client_sock.close()` en `finally`, cierre explícito de server socket y archivos protegidos por lock.
 
-## Parte 3: Repaso de Concurrencia
-En este ejercicio es importante considerar los mecanismos de sincronización a utilizar para el correcto funcionamiento de la persistencia.
-
-### Ejercicio N°8:
-
-Modificar el servidor para que permita aceptar conexiones y procesar mensajes en paralelo. En caso de que el alumno implemente el servidor en Python utilizando _multithreading_,  deberán tenerse en cuenta las [limitaciones propias del lenguaje](https://wiki.python.org/moin/GlobalInterpreterLock).
-
-## Condiciones de Entrega
-Se espera que los alumnos realicen un _fork_ del presente repositorio para el desarrollo de los ejercicios y que aprovechen el esqueleto provisto tanto (o tan poco) como consideren necesario.
-
-Cada ejercicio deberá resolverse en una rama independiente con nombres siguiendo el formato `ej${Nro de ejercicio}`. Se permite agregar commits en cualquier órden, así como crear una rama a partir de otra, pero al momento de la entrega deberán existir 8 ramas llamadas: ej1, ej2, ..., ej7, ej8.
- (hint: verificar listado de ramas y últimos commits con `git ls-remote`)
-
-Se espera que se redacte una sección del README en donde se indique cómo ejecutar cada ejercicio y se detallen los aspectos más importantes de la solución provista, como ser el protocolo de comunicación implementado (Parte 2) y los mecanismos de sincronización utilizados (Parte 3).
-
-Se proveen [pruebas automáticas](https://github.com/7574-sistemas-distribuidos/tp0-tests) de caja negra. Se exige que la resolución de los ejercicios pase tales pruebas, o en su defecto que las discrepancias sean justificadas y discutidas con los docentes antes del día de la entrega. El incumplimiento de las pruebas es condición de desaprobación, pero su cumplimiento no es suficiente para la aprobación. Respetar las entradas de log planteadas en los ejercicios, pues son las que se chequean en cada uno de los tests.
-
-La corrección personal tendrá en cuenta la calidad del código entregado y casos de error posibles, se manifiesten o no durante la ejecución del trabajo práctico. Se pide a los alumnos leer atentamente y **tener en cuenta** los criterios de corrección informados  [en el campus](https://campusgrado.fi.uba.ar/mod/page/view.php?id=73393).
+7. **Configuración**
+   - Parámetros leídos de **env/config** (puerto, backlog, logging level, cantidad esperada de agencias vía `CLI_CLIENTS`).
+   - Límite de espera en Barrier (`timeout=120`) para evitar deadlocks si un cliente falla.
