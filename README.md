@@ -9,7 +9,7 @@ El protocolo implementado es basado en texto plano con encoding UTF-8, lo que fa
 
 ### Mensajes Cliente → Servidor
 
-- Bets - S:<AMOUNT> \n <BETS> 
+- Bets - ` S:<AMOUNT> <\n> <BETS>`
 El header indica el inicio de un lote de apuestas.
 La cantidad <AMOUNT> especifica exactamente cuántas apuestas contiene el lote y permite al servidor pre-dimensionar buffers y validar integridad del mensaje.
 El payload, se separa del header por un NEWLINE y tiene la información serializada de múltiples apuestas en un solo mensaje.
