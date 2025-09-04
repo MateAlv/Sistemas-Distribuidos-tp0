@@ -5,35 +5,40 @@
 En el presente repositorio se provee una implementación básica de una arquitectura cliente/servidor aplicada, en donde todas las dependencias del mismo se encuentran encapsuladas en containers. Se pueden distinguir 8 ramas que aluden a ejercicios incrementales que culminan en la creación de una aplicación de lotería centralizada en un servidor.
 
 ## Protocolo de Comunicación:
+El protocolo implementado es basado en texto plano con encoding UTF-8, lo que facilita el debugging y garantiza compatibilidad cross-platform. Utiliza delimitadores jerárquicos para estructurar la información.
 
+### - Mensajes Informativos
+Los mensajes informativos gestionan el control de flujo y la sincronización entre cliente y servidor. Incluyen confirmaciones de procesamiento (OK/FAIL), notificaciones de finalización (FINISHED) y señalización de estados especiales (N para ausencia de ganadores).
+
+### - Mensajes de Datos
+Los mensajes de datos transportan la información de negocio del sistema. Comprenden los lotes de apuestas (S:<cantidad> seguido de datos serializados) enviados del cliente al servidor, y las listas de ganadores (WINNERS:<dnis>) retornadas del servidor a cada cliente después del sorteo.
 
 ### Mensajes Cliente → Servidor
-
-### S:<CANTIDAD> + Datos de Apuestas (Payload)
-### HEADER: 
+### Bets - S:<CANTIDAD> \n <DATOS> 
+- HEADER: S
 Mensaje de header que indica el inicio de un lote de apuestas
 La cantidad especifica exactamente cuántas apuestas contiene el lote
 Permite al servidor pre-dimensionar buffers y validar integridad del mensaje
 
-### PAYLOAD: 
+- PAYLOAD: 
 Contiene la información serializada de múltiples apuestas en un solo mensaje
 Formato: agency;nombre;apellido;dni;fecha_nacimiento;numero_apostado
 Se envía inmediatamente después del header S:<CANTIDAD>
 
-### FINISHED
+- FINISHED
 Mensaje de control que notifica al servidor que el cliente terminó de enviar todas sus apuestas
 Dispara el mecanismo de sincronización mediante threading barrier
 Indica que el cliente está listo para recibir los resultados del sorteo
 
 ### Mensajes Servidor → Cliente
 
-### OK
+- OK
 Respuesta de confirmación que indica procesamiento exitoso del lote recibido
 Confirma que todas las apuestas del lote fueron almacenadas correctamente
 Permite al cliente continuar con el siguiente lote
 FAIL
 
-### FAIL
+- FAIL
 Respuesta de error que indica problemas en el procesamiento del lote
 Se utiliza en casos excepcionales de error de parsing o almacenamiento
 Permite al cliente implementar lógica de retry si es necesario
