@@ -19,6 +19,8 @@ type BatchReader struct {
 	totalRead       int
 }
 
+const BATCH_SIZE_CHAR = "S:"
+
 // NewBatchReader creates a new BatchReader for a CSV file
 func NewBatchReader(filePath string, agency string, protocol ProtocolConfig) (*BatchReader, error) {
 	file, err := os.Open(filePath)
@@ -114,5 +116,5 @@ func (br *BatchReader) SerializeBatch(bets []*Bet) string {
 	}
 
 	batchData := strings.Join(serializedBets, br.messageProtocol.BatchSeparator) // bet1~bet2~bet3
-	return fmt.Sprintf("S:%d\n%s", len(bets), batchData)                         // S:3\nbet1~bet2~bet3
+	return fmt.Sprintf(BATCH_SIZE_CHAR+"%d\n%s", len(bets), batchData)           // S:3\nbet1~bet2~bet3
 }

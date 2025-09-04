@@ -86,12 +86,16 @@ func (c *Client) SendBatch(bets []*Bet) error {
 	batchData := c.batchReader.SerializeBatch(bets)
 	message := batchData + c.config.MessageProtocol.MessageDelimiter
 
-	_, err := c.conn.Write([]byte(message))
+	messageBytes := []byte(message)
+	bytesWritten, err := c.conn.Write(messageBytes)
 	if err != nil {
 		return fmt.Errorf("failed to send batch: %v", err)
 	}
+	if bytesWritten != len(messageBytes) {
+		return fmt.Errorf("incomplete write: sent %d of %d bytes", bytesWritten, len(messageBytes))
+	}
 
-	response, err := bufio.NewReader(c.conn).ReadString('\n')
+	response, err := bufio.NewReader(c.conn).ReadString(c.config.MessageProtocol.MessageDelimiter[0])
 	if err != nil {
 		log.Errorf("action: apuesta_enviada | result: fail | cantidad: %d | error: %v", len(bets), err)
 		return err
@@ -153,32 +157,37 @@ func (c *Client) StartClientLoop() error {
 	return nil
 }
 
-func (c *Client) SendFinishedNotification() error {
+func (c *Client) SendFinishedNotification() ([]string, error) {
 	if err := c.createClientSocket(); err != nil {
-		return err
+		return nil, err
 	}
 	defer c.conn.Close()
 
 	message := c.config.MessageProtocol.ProtocolFinishedMessage + c.config.MessageProtocol.MessageDelimiter
 
-	if _, err := c.conn.Write([]byte(message)); err != nil {
-		return fmt.Errorf("failed to send finished notification: %v", err)
+	messageBytes := []byte(message)
+	bytesWritten, err := c.conn.Write(messageBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send finished: %v", err)
+	}
+	if bytesWritten != len(messageBytes) {
+		return nil, fmt.Errorf("incomplete write: sent %d of %d bytes", bytesWritten, len(messageBytes))
 	}
 
 	// Read response
 	response := make([]byte, 1024)
 	n, err := c.conn.Read(response)
 	if err != nil {
-		return fmt.Errorf("failed to read finished response: %v", err)
+		return nil, fmt.Errorf("failed to read finished response: %v", err)
 	}
 
 	responseStr := strings.TrimSpace(string(response[:n]))
 	if responseStr != c.config.MessageProtocol.SuccessResponse {
-		return fmt.Errorf("server rejected finished notification: %s", responseStr)
+		return nil, fmt.Errorf("server rejected finished notification: %s", responseStr)
 	}
 
 	log.Infof("action: finished_notification_sent | result: success")
-	return nil
+	return nil, nil
 }
 
 func (c *Client) sendBatch(bets []*Bet) error {

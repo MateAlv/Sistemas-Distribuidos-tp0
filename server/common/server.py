@@ -43,6 +43,10 @@ class Server:
             while self._running:
                 try:
                     client_sock, addr = self._server_socket.accept()
+                    if not client_sock:
+                        logging.error("action: accept_connection | result: fail | reason: null_socket")
+                        continue
+                    logging.debug(f"action: accept_connection | result: success | ip: {addr[0]}")
                     
                     # Create thread to handle client
                     client_thread = threading.Thread(
