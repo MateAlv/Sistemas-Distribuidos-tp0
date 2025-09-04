@@ -109,7 +109,7 @@ Una vez que todos los clientes han enviado sus mensajes de finalización y se ej
 
 Caso A: Con Ganadores El servidor envía el prefijo WINNERS: seguido de los DNIs ganadores separados por el separador de lotes y terminado con el delimitador de mensaje.
 Ejemplo:
-WINNERS:12345678~87654321~11111111\n
+WINNERS:12345678\~87654321\~11111111\n
 
 Caso B: Cuando una agencia no tiene ganadores, el servidor responde únicamente con la letra N seguida del delimitador.
 Mensaje: N\n
