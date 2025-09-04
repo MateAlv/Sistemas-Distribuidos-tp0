@@ -4,6 +4,9 @@ import logging
 import threading
 from .utils import (deserialize_batch, store_bets, load_winning_bets, BATCH_SEPARATOR)
 
+# File lock for thread-safe file operations
+_FILE_LOCK = threading.Lock()
+
 # Message protocol constants
 MESSAGE_DELIMITER = b"\n"
 SUCCESS_RESPONSE = "OK"
@@ -30,7 +33,10 @@ class Server:
         
         # Get expected agencies from environment
         expected_agencies = int(os.getenv('CLI_CLIENTS', '5'))
+
+        # Barrier and Locks for lottery synchronization
         self.lottery_barrier = threading.Barrier(expected_agencies)
+        self.file_lock = _FILE_LOCK
         
         logging.info(f"action: server_init | result: success | expected_agencies: {expected_agencies}")
         
@@ -91,7 +97,8 @@ class Server:
                     bets = deserialize_batch(msg)
                     if bets:
                         client_agency = bets[0].agency
-                        store_bets(bets)
+                        with self.file_lock:
+                            store_bets(bets)
                         logging.info(f"action: apuesta_recibida | result: success | cantidad: {len(bets)}")
                     self.__send_complete_message(client_sock, SUCCESS_RESPONSE)
                     
@@ -124,8 +131,9 @@ class Server:
         except Exception as e:
             logging.error(f"action: lottery_barrier_error | error: {e}")
             
-        # Lottery is complete - load and return winners for this agency
-        winning_dnis = load_winning_bets(client_agency)
+        # Lottery is complete - load and return winners for this agency - THREAD SAFETY FIRST
+            with self.file_lock:
+                winning_dnis = load_winning_bets(client_agency)
         
         if winning_dnis:
             response = WINNERS_PREFIX + BATCH_SEPARATOR.join(winning_dnis)
