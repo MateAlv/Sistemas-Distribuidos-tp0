@@ -48,10 +48,12 @@ Not thread-safe/process-safe.
 """
 def store_bets(bets: list[Bet]) -> None:
     with open(STORAGE_FILEPATH, 'a+') as file:
+        logging.debug(f"action: fd_open | result: success | kind: file | fd:{file.fileno()} | path:{STORAGE_FILEPATH} | mode:a+")
         writer = csv.writer(file, quoting=csv.QUOTE_MINIMAL)
         for bet in bets:
             writer.writerow([bet.agency, bet.first_name, bet.last_name,
                              bet.document, bet.birthdate, bet.number])
+    logging.debug(f"action: fd_close | result: success | kind: file | path:{STORAGE_FILEPATH}")
 
 """
 Loads the information all the bets in the STORAGE_FILEPATH file.
@@ -74,6 +76,8 @@ def load_winning_bets(agency: int) -> list[str]:
     
     try:
         with open(STORAGE_FILEPATH, 'r') as file:
+            logging.debug(f"action: fd_open | result: success | kind: file | fd:{file.fileno()} | path:{STORAGE_FILEPATH} | mode:r")
+
             reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
             for row in reader:
                 if len(row) >= BET_PARTS_COUNT:
@@ -82,7 +86,8 @@ def load_winning_bets(agency: int) -> list[str]:
                     # Filter: only this agency AND winning number is returned
                     if bet.agency == agency and has_won(bet):
                         winning_dnis.append(bet.document)
-                        
+        logging.debug(f"action: fd_close | result: success | kind: file | path:{STORAGE_FILEPATH}")
+        
     except FileNotFoundError:
         logging.warning(f"action: load_winning_bets | agency: {agency} | result: file_not_found")
         return []

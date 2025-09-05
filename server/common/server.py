@@ -123,8 +123,13 @@ class Server:
             logging.error(f"action: client_handler_error | error: {e}")
         finally:
             try:
+                fd = client_sock.fileno()
+            except Exception:
+                fd = "unknown"
+            try:
                 client_sock.close()
-            except:
+                logging.debug(f"action: fd_close | result: success | kind: client_socket | fd:{fd}")
+            except Exception:
                 pass
 
     def __handle_finished_and_return_winners(self, client_sock, client_agency):
@@ -218,11 +223,14 @@ class Server:
             pass
         if self._server_socket:
             try:
+                fd = self._server_socket.fileno()
+            except Exception:
+                fd = "unknown"
+            try:
                 self._server_socket.close()
-            except:
-                pass
-        if self._server_socket:
-            self._server_socket.close()
+                logging.debug(f"action: fd_close | result: success | kind: listen_socket | fd:{fd}")
+            except Exception as e:
+                logging.warning(f"action: listen_close | result: fail | error:{e}")
 
     def __graceful_shutdown(self):
         """Wait for all client threads to finish"""
@@ -233,8 +241,14 @@ class Server:
         
         # Close server socket if not already closed
         try:
-            self._server_socket.close()
-        except:
+            if self._server_socket:
+                try:
+                    fd = self._server_socket.fileno()
+                except Exception:
+                    fd = "unknown"
+                self._server_socket.close()
+                logging.debug(f"action: fd_close | result: success | kind: listen_socket | fd:{fd}")
+        except Exception:
             pass
             
         # Wait for all client threads to complete their work
