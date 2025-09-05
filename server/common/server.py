@@ -206,13 +206,22 @@ class Server:
         """
         logging.info("action: sigterm_received | result: success")
         self._running = False
+        try:
+            self.lottery_barrier.abort()
+        except Exception:
+            pass
+        if self._server_socket:
+            try:
+                self._server_socket.close()
+            except:
+                pass
         if self._server_socket:
             self._server_socket.close()
 
     def __graceful_shutdown(self):
         """Wait for all client threads to finish"""
         logging.info("action: shutdown | result: in_progress")
-        
+
         # Stop accepting new connections
         self._running = False
         
