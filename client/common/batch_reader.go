@@ -27,6 +27,7 @@ func NewBatchReader(filePath string, agency string, protocol ProtocolConfig) (*B
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %v", filePath, err)
 	}
+	log.Debugf("action: fd_open | result: success | kind: file | path:%s | mode:read", filePath)
 
 	return &BatchReader{
 		scanner:         bufio.NewScanner(file),
@@ -103,6 +104,7 @@ func (br *BatchReader) GetStats() (lineNumber, totalRead int) {
 // Close closes the underlying file
 func (br *BatchReader) Close() error {
 	if br.file != nil {
+		log.Debugf("action: fd_close | result: success | kind: file | path:%s", br.file.Name())
 		return br.file.Close()
 	}
 	return nil

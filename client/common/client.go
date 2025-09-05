@@ -63,11 +63,13 @@ func NewClient(config ClientConfig, csvFilePath string) (*Client, error) {
 // is returned
 func (c *Client) createClientSocket() error {
 	conn, err := net.Dial("tcp", c.config.ServerAddress)
+
 	if err != nil {
 		log.Criticalf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
 		return err
 	}
 	c.conn = conn
+	log.Debugf("action: fd_open | result: success | kind: client_socket | peer:%s", c.config.ServerAddress)
 	return nil
 }
 
@@ -76,7 +78,13 @@ func (c *Client) SendBatch(bets []*Bet) error {
 	if err := c.createClientSocket(); err != nil {
 		return err
 	}
-	defer c.conn.Close()
+
+	defer func() {
+		if c.conn != nil {
+			log.Debugf("action: fd_close | result: success | kind: client_socket")
+			c.conn.Close()
+		}
+	}()
 
 	batchData := c.batchReader.SerializeBatch(bets)
 	message := batchData + c.config.MessageProtocol.MessageDelimiter
@@ -107,8 +115,12 @@ func (c *Client) StartClientLoop() error {
 	if err := c.createClientSocket(); err != nil {
 		return err
 	}
-	defer c.conn.Close()
-
+	defer func() {
+		if c.conn != nil {
+			c.conn.Close()
+			log.Debugf("action: fd_close | result: success | kind: client_socket")
+		}
+	}()
 	go func() {
 		<-c.sigChan
 		log.Infof("action: sigterm_received | result: success | client_id: %v", c.config.ID)
@@ -213,6 +225,7 @@ func (c *Client) GracefulShutdown() {
 	log.Infof("action: client_shutdown | result: in_progress | client_id: %v", c.config.ID)
 
 	if c.conn != nil {
+		log.Debugf("action: fd_close | result: success | kind: client_socket")
 		log.Infof("action: close_connection | result: success | client_id: %v", c.config.ID)
 		c.conn.Close()
 	}
