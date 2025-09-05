@@ -145,6 +145,22 @@ Además de la barrera, el sistema utiliza un **Lock** (mutua exclusión) para pr
 
 Este mecanismo garantiza que las operaciones de I/O sean atómicas y que las filas del CSV no se corrompan por escrituras intercaladas. Sin el uso de locks, podría ocurrir que dos hilos intenten escribir en el archivo simultáneamente, provocando pérdida o mezcla de datos.  
 
+### Logging estructurado
+El sistema utiliza **logging estructurado** en cliente y servidor, con un formato homogéneo para todas las acciones:  
+
+`<source> | <timestamp> <level> action: <accion> | result: <success|fail|in_progress> | <detalles>`
+  
+Ejemplos:
+- `server   | 2025-09-04 22:34:07 DEBUG    action: fd_open | result: success | kind: listen_socket | port:12345`
+- `client1  | 2025-09-04 22:34:08 INFO     action: apuesta_enviada | result: success | cantidad: 10`
+- `server   | 2025-09-04 22:34:09 INFO     action: winners_sent | result: success | agency: 3 | cant_ganadores: 2`
+- `client2  | 2025-09-04 22:34:10 INFO     action: client_shutdown | result: success | client_id: 2`
+
+De esta forma se puede:
+- **Auditar recursos**: cada *file descriptor* abierto/cerrado loguea `fd_open`/`fd_close`.
+- **Trazar flujo de mensajes**: desde `apuesta_enviada` → `apuesta_recibida` → `sorteo` → `winners_sent`.
+- **Detectar fallos**: el campo `result` normaliza estados (`success|fail|in_progress`) y facilita el parsing automático en los tests. 
+
 # Resoluciones pedidas:
 ## Parte 1: Introducción a Docker
 
