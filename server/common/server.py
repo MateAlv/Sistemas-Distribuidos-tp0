@@ -58,6 +58,9 @@ class Server:
                     if not client_sock:
                         logging.error("action: accept_connection | result: fail | reason: null_socket")
                         continue
+                    logging.debug(
+                        f"action: fd_open | result: success | kind: client_socket | fd:{client_sock.fileno()} | peer:{addr[0]}:{addr[1]}"
+                    )
                     logging.debug(f"action: accept_connection | result: success | ip: {addr[0]}")
                     
                     # Create thread to handle client
